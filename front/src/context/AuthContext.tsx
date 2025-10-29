@@ -1,62 +1,143 @@
-import { createContext, useState, useContext, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { authAPI } from '../api/auth';
 
 interface User {
-  id: string
-  username: string
-  phone: string
-  // 其他用户信息
+  id: string;
+  email: string;
+  name?: string;
+  avatar_url?: string;
+  created_at: string;
 }
 
 interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  login: (username: string, password: string) => Promise<void>
-  register: (userData: any) => Promise<void>
-  logout: () => void
-  // TODO: 实现完整的认证逻辑
+  user: User | null;
+  token: string | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name?: string) => Promise<void>;
+  logout: () => void;
+  updateProfile: (data: { name?: string; avatar_url?: string }) => Promise<User>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context
-}
+  return context;
+};
 
-interface AuthProviderProps {
-  children: ReactNode
-}
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
 
-  const login = async (username: string, password: string) => {
-    // TODO: 实现登录逻辑，调用API并处理响应
-    console.log('Login attempt:', username)
-    // 暂时使用模拟数据
-    setUser({ id: '1', username, phone: '' })
-  }
+    if (storedToken && storedUser) {
+      setToken(storedToken);
+      setUser(JSON.parse(storedUser));
+      // 登录后获取最新用户信息
+      fetchUserProfile();
+    }
 
-  const register = async (userData: any) => {
-    // TODO: 实现注册逻辑，调用API并处理响应
-    console.log('Register attempt:', userData)
-  }
+    setIsLoading(false);
+  }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      if (response.success) {
+        setUser(response.data);
+        localStorage.setItem('user', JSON.stringify(response.data));
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error);
+      // 清除无效token
+      logout();
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await authAPI.login({ email, password });
+      
+      if (response.success) {
+        const { user: userData, token: tokenData } = response.data;
+        
+        setUser(userData);
+        setToken(tokenData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('token', tokenData);
+      } else {
+        throw new Error(response.message || '登录失败');
+      }
+    } catch (error) {
+      console.error('登录失败:', error);
+      throw error;
+    }
+  };
+
+  const register = async (email: string, password: string, name?: string) => {
+    try {
+      const response = await authAPI.register({ email, password, name });
+      
+      if (response.success) {
+        const { user: userData, token: tokenData } = response.data;
+        
+        setUser(userData);
+        setToken(tokenData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('token', tokenData);
+      } else {
+        throw new Error(response.message || '注册失败');
+      }
+    } catch (error) {
+      console.error('注册失败:', error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (data: { name?: string; avatar_url?: string }) => {
+    try {
+      const response = await authAPI.updateProfile(data);
+      
+      if (response.success) {
+        setUser(response.data);
+        localStorage.setItem('user', JSON.stringify(response.data));
+        return response.data;
+      } else {
+        throw new Error(response.message || '更新失败');
+      }
+    } catch (error) {
+      console.error('更新资料失败:', error);
+      throw error;
+    }
+  };
 
   const logout = () => {
-    // TODO: 实现登出逻辑，清除token等
-    setUser(null)
-  }
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  };
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    login,
-    register,
-    logout
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        token, 
+        isLoading, 
+        login, 
+        register, 
+        logout,
+        updateProfile
+      }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

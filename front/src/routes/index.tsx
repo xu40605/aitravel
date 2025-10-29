@@ -1,5 +1,6 @@
 import Login from '../pages/Login'
 import Register from '../pages/Register'
+import Profile from '../pages/Profile'
 
 interface RouteConfig {
   path: string
@@ -17,6 +18,11 @@ const routes: RouteConfig[] = [
     path: '/register',
     component: Register,
     title: '注册'
+  },
+  {
+    path: '/profile',
+    component: Profile,
+    title: '个人资料'
   },
   {
     path: '/',

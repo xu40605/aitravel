@@ -1,94 +1,80 @@
-import { useState } from 'react'
-import { Form, Input, Button, Card, Typography, message } from 'antd'
-import { UserOutlined, LockOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import React, { useState } from 'react';
+import { Form, Input, Button, Card, message, Typography } from 'antd';
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import '../styles/index.css';
 
-const { Title } = Typography
+const { Title } = Typography;
 
 const Login = () => {
-  const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleSubmit = async (values: { username: string; password: string }) => {
-    setLoading(true)
+  const handleLogin = async (values: { email: string; password: string }) => {
+    setLoading(true);
     try {
-      // 这里将来会调用后端API进行登录验证
-      console.log('登录信息:', values)
-      
-      // 模拟登录成功
-      setTimeout(() => {
-        message.success('登录成功')
-        navigate('/dashboard') // 登录成功后跳转到首页
-      }, 1000)
-    } catch (error) {
-      message.error('登录失败，请检查用户名和密码')
-      console.error('登录错误:', error)
+      await login(values.email, values.password);
+      message.success('登录成功');
+      navigate('/profile');
+    } catch (error: any) {
+      message.error(error.message || '登录失败，请检查邮箱和密码');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="flex justify-center items-center min-h-[calc(100vh-64px)] bg-gray-50 p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <div className="text-center mb-6">
-          <Title level={3}>AI Travel Planner</Title>
-          <p className="text-gray-600">请登录您的账号</p>
-        </div>
-        
+    <div className="flex justify-center items-center min-h-screen bg-gray-50">
+      <Card className="w-full max-w-md">
+        <Title level={2} className="text-center mb-6">登录</Title>
         <Form
           name="login"
           initialValues={{ remember: true }}
-          onFinish={handleSubmit}
-          layout="vertical"
+          onFinish={handleLogin}
         >
           <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
+            name="email"
+            rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入有效的邮箱地址' }]}
           >
             <Input
-              prefix={<UserOutlined className="text-gray-400" />}
-              placeholder="请输入用户名"
+              prefix={<UserOutlined className="site-form-item-icon" />}
+              placeholder="邮箱"
+              type="email"
             />
           </Form.Item>
-
+          
           <Form.Item
             name="password"
-            label="密码"
             rules={[{ required: true, message: '请输入密码' }]}
           >
-            <Input.Password
-              prefix={<LockOutlined className="text-gray-400" />}
-              placeholder="请输入密码"
+            <Input
+              prefix={<LockOutlined className="site-form-item-icon" />}
+              type="password"
+              placeholder="密码"
             />
           </Form.Item>
 
-          <Form.Item className="mt-6">
+          <Form.Item>
             <Button
               type="primary"
               htmlType="submit"
               className="w-full"
               loading={loading}
-              size="large"
             >
               登录
             </Button>
           </Form.Item>
-
-          <div className="text-center mt-4">
-            <span className="text-gray-600">还没有账号？</span>
-            <a 
-              href="/register" 
-              className="text-primary ml-1 hover:underline"
-            >
-              立即注册
-            </a>
+          
+          <div className="text-center">
+            <span>还没有账号？ </span>
+            <a href="/register">立即注册</a>
           </div>
         </Form>
       </Card>
     </div>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;

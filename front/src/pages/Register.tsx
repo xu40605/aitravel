@@ -1,82 +1,70 @@
-import { useState } from 'react'
-import { Form, Input, Button, Card, Typography, message } from 'antd'
-import { UserOutlined, LockOutlined, MobileOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import React, { useState } from 'react';
+import { Form, Input, Button, Card, message, Typography } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import '../styles/index.css';
 
-const { Title } = Typography
+const { Title } = Typography;
 
 const Register = () => {
-  const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { register } = useAuth();
 
-  const handleSubmit = async (values: {
-    username: string
-    password: string
-    confirmPassword: string
-    phone: string
-  }) => {
-    setLoading(true)
-    try {
-      // 验证密码是否一致
-      if (values.password !== values.confirmPassword) {
-        message.error('两次输入的密码不一致')
-        return
-      }
-
-      // 这里将来会调用后端API进行注册
-      console.log('注册信息:', values)
-
-      // 模拟注册成功
-      setTimeout(() => {
-        message.success('注册成功，请登录')
-        navigate('/login')
-      }, 1000)
-    } catch (error) {
-      message.error('注册失败，请稍后重试')
-      console.error('注册错误:', error)
-    } finally {
-      setLoading(false)
+  const handleRegister = async (values: { email: string; password: string; name?: string; confirmPassword: string }) => {
+    setLoading(true);
+    
+    // 验证密码是否一致
+    if (values.password !== values.confirmPassword) {
+      message.error('两次输入的密码不一致');
+      setLoading(false);
+      return;
     }
-  }
+    
+    try {
+      await register(values.email, values.password, values.name);
+      message.success('注册成功');
+      navigate('/profile');
+    } catch (error: any) {
+      message.error(error.message || '注册失败');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="flex justify-center items-center min-h-[calc(100vh-64px)] bg-gray-50 p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <div className="text-center mb-6">
-          <Title level={3}>AI Travel Planner</Title>
-          <p className="text-gray-600">创建您的账号</p>
-        </div>
-
+    <div className="flex justify-center items-center min-h-screen bg-gray-50">
+      <Card className="w-full max-w-md">
+        <Title level={2} className="text-center mb-6">注册</Title>
         <Form
           name="register"
-          onFinish={handleSubmit}
+          onFinish={handleRegister}
           layout="vertical"
         >
           <Form.Item
-            name="username"
-            label="用户名"
-            rules={[
-              { required: true, message: '请输入用户名' },
-              { min: 3, message: '用户名至少需要3个字符' }
-            ]}
+            name="name"
+            label="昵称"
+            rules={[{ required: true, message: '请输入昵称' }]}
           >
             <Input
-              prefix={<UserOutlined className="text-gray-400" />}
-              placeholder="请输入用户名"
+              prefix={<UserOutlined className="site-form-item-icon" />}
+              placeholder="昵称"
             />
           </Form.Item>
 
           <Form.Item
-            name="phone"
-            label="手机号"
+            name="email"
+            label="邮箱"
             rules={[
-              { required: true, message: '请输入手机号' },
-              { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码' }
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '请输入有效的邮箱地址' }
             ]}
           >
             <Input
-              prefix={<MobileOutlined className="text-gray-400" />}
-              placeholder="请输入手机号"
+              prefix={<MailOutlined className="site-form-item-icon" />}
+              placeholder="邮箱"
+              type="email"
             />
           </Form.Item>
 
@@ -88,48 +76,46 @@ const Register = () => {
               { min: 6, message: '密码至少需要6个字符' }
             ]}
           >
-            <Input.Password
-              prefix={<LockOutlined className="text-gray-400" />}
-              placeholder="请输入密码"
+            <Input
+              prefix={<LockOutlined className="site-form-item-icon" />}
+              type="password"
+              placeholder="密码"
             />
           </Form.Item>
 
           <Form.Item
             name="confirmPassword"
             label="确认密码"
-            rules={[{ required: true, message: '请确认密码' }]}
+            rules={[
+              { required: true, message: '请确认密码' }
+            ]}
           >
-            <Input.Password
-              prefix={<LockOutlined className="text-gray-400" />}
-              placeholder="请再次输入密码"
+            <Input
+              prefix={<LockOutlined className="site-form-item-icon" />}
+              type="password"
+              placeholder="确认密码"
             />
           </Form.Item>
 
-          <Form.Item className="mt-6">
+          <Form.Item>
             <Button
               type="primary"
               htmlType="submit"
               className="w-full"
               loading={loading}
-              size="large"
             >
               注册
             </Button>
           </Form.Item>
 
-          <div className="text-center mt-4">
-            <span className="text-gray-600">已有账号？</span>
-            <a 
-              href="/login" 
-              className="text-primary ml-1 hover:underline"
-            >
-              立即登录
-            </a>
+          <div className="text-center">
+            <span>已有账号？ </span>
+            <a href="/login">立即登录</a>
           </div>
         </Form>
       </Card>
     </div>
-  )
-}
+  );
+};
 
-export default Register
+export default Register;
