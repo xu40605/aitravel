@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import errorHandler from './middleware/errorHandler';
 import healthRouter from './routes/health';
-import logger from './utils/logger';
+import authRouter from './routes/auth';
+import errorHandler from './middleware/errorHandler';
+import { logger } from './utils/logger';
 
 const app = express();
 
@@ -12,6 +13,7 @@ app.use(cors());
 
 // Routes
 app.use('/api/health', healthRouter);
+app.use('/api/auth', authRouter);
 
 // Error Handler
 app.use(errorHandler);
