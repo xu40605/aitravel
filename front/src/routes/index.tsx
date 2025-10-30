@@ -1,34 +1,28 @@
-import Login from '../pages/Login'
-import Register from '../pages/Register'
-import Profile from '../pages/Profile'
+import { Routes, Route, Navigate } from 'react-router-dom';
+import Login from '../pages/Login';
+import Register from '../pages/Register';
+import Profile from '../pages/Profile';
+import VoiceRecognition from '../pages/VoiceRecognition';
+import { PrivateRoute } from './PrivateRoute';
 
-interface RouteConfig {
-  path: string
-  component: React.ComponentType
-  title?: string
-}
+const AppRoutes = () => {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/profile" element={
+        <PrivateRoute>
+          <Profile />
+        </PrivateRoute>
+      } />
+      <Route path="/voice-recognition" element={
+        <PrivateRoute>
+          <VoiceRecognition />
+        </PrivateRoute>
+      } />
+      <Route path="/" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+};
 
-const routes: RouteConfig[] = [
-  {
-    path: '/login',
-    component: Login,
-    title: '登录'
-  },
-  {
-    path: '/register',
-    component: Register,
-    title: '注册'
-  },
-  {
-    path: '/profile',
-    component: Profile,
-    title: '个人资料'
-  },
-  {
-    path: '/',
-    component: Login, // 暂时默认重定向到登录页
-    title: '首页'
-  }
-]
-
-export default routes
+export default AppRoutes;
