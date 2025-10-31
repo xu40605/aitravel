@@ -17,7 +17,7 @@ const Login = () => {
     try {
       await login(values.email, values.password);
       message.success('登录成功');
-      navigate('/profile');
+      navigate('/planner');
     } catch (error: any) {
       message.error(error.message || '登录失败，请检查邮箱和密码');
     } finally {

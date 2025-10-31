@@ -3,8 +3,9 @@ import cors from 'cors';
 import healthRouter from './routes/health';
 import authRouter from './routes/auth';
 import speechRecognitionRouter from './routes/speechRecognition';
+import plannerRouter from './routes/planner';
 import errorHandler from './middleware/errorHandler';
-import { logger } from './utils/logger';
+import logger from './utils/logger';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(cors());
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/speech', speechRecognitionRouter);
+app.use('/api/planner', plannerRouter);
 
 // Error Handler
 app.use(errorHandler);

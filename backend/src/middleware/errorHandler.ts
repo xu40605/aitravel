@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 
 interface ErrorResponse {
+  success: boolean;
   message: string;
   stack?: string;
 }
@@ -12,6 +13,7 @@ const errorHandler = (err: Error, req: Request, res: Response, next: NextFunctio
   logger.error(`Error: ${err.message}`, { stack: err.stack });
   
   const errorResponse: ErrorResponse = {
+    success: false,
     message: err.message,
   };
   

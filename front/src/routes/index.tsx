@@ -1,26 +1,41 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
-import Profile from '../pages/Profile';
 import VoiceRecognition from '../pages/VoiceRecognition';
+import PlannerPage from '../pages/Planner/PlannerPage';
+import MyPlansPage from '../pages/MyPlans/MyPlansPage';
+import ProfilePage from '../pages/Profile/ProfilePage';
 import { PrivateRoute } from './PrivateRoute';
+import MainLayout from '../layout/MainLayout';
 
 const AppRoutes = () => {
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/profile" element={
-        <PrivateRoute>
-          <Profile />
-        </PrivateRoute>
-      } />
+      
+      {/* Protected routes */}
       <Route path="/voice-recognition" element={
         <PrivateRoute>
           <VoiceRecognition />
         </PrivateRoute>
       } />
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      
+      {/* Main application routes with layout */}
+      <Route path="/" element={
+        <PrivateRoute>
+          <MainLayout />
+        </PrivateRoute>
+      }>
+        <Route index element={<Navigate to="planner" replace />} />
+        <Route path="planner" element={<PlannerPage />} />
+        <Route path="my-plans" element={<MyPlansPage />} />
+        <Route path="profile" element={<ProfilePage />} />
+      </Route>
+      
+      {/* Default redirect to login if not authenticated */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 };
