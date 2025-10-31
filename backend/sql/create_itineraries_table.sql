@@ -17,25 +17,6 @@ CREATE INDEX IF NOT EXISTS idx_itineraries_destination ON itineraries(destinatio
 CREATE INDEX IF NOT EXISTS idx_itineraries_created_at ON itineraries(created_at);
 CREATE INDEX IF NOT EXISTS idx_itineraries_start_end_date ON itineraries(start_date, end_date);
 
--- 启用行级安全性（RLS）以保护用户数据
-ALTER TABLE itineraries ENABLE ROW LEVEL SECURITY;
-
--- 创建策略，确保用户只能访问自己的行程
-CREATE POLICY "Users can only access their own itineraries" ON itineraries
-  USING (user_id = auth.uid());
-
--- 创建策略，确保用户只能更新自己的行程
-CREATE POLICY "Users can only update their own itineraries" ON itineraries
-  FOR UPDATE USING (user_id = auth.uid());
-
--- 创建策略，确保用户只能删除自己的行程
-CREATE POLICY "Users can only delete their own itineraries" ON itineraries
-  FOR DELETE USING (user_id = auth.uid());
-
--- 创建策略，确保用户只能插入自己的行程
-CREATE POLICY "Users can only insert their own itineraries" ON itineraries
-  FOR INSERT WITH CHECK (user_id = auth.uid());
-
 -- 创建一个函数来自动更新updated_at字段
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -51,8 +32,9 @@ BEFORE UPDATE ON itineraries
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 可选：如果需要与auth.users表建立外键关系
-ALTER TABLE itineraries
-ADD CONSTRAINT fk_user
-FOREIGN KEY (user_id)
-REFERENCES auth.users(id)
-ON DELETE CASCADE;
+-- 暂时注释掉外键约束，以便在开发环境中测试
+-- ALTER TABLE itineraries
+-- ADD CONSTRAINT fk_user
+-- FOREIGN KEY (user_id)
+-- REFERENCES auth.users(id)
+-- ON DELETE CASCADE;

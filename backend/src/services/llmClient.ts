@@ -80,19 +80,27 @@ export const callGLM = async (prompt: string): Promise<string> => {
     logger.info('GLM API 调用成功，成功获取行程内容');
     return content;
   } catch (error) {
-    logger.error(`GLM API 调用失败: ${(error as Error).message}`);
-    const typedError = error as GLMError;
+    const errorMessage = error instanceof Error ? error.message : String(error || '未知错误');
+    logger.error(`GLM API 调用失败: ${errorMessage}`);
     
-    // 处理不同类型的错误
-    if (typedError.response) {
-      // API 返回了错误状态码
-      throw new Error(`GLM API 错误: ${typedError.response.status} ${typedError.response.statusText}`);
-    } else if (typedError.request) {
-      // 请求已发送但没有收到响应
-      throw new Error('GLM API 无响应，请检查网络连接或 API 服务状态');
+    // 安全地处理不同类型的错误
+    if (error && typeof error === 'object') {
+      const typedError = error as any;
+      
+      // 处理不同类型的错误
+      if (typedError.response) {
+        // API 返回了错误状态码
+        throw new Error(`GLM API 错误: ${typedError.response.status || '未知状态码'} ${typedError.response.statusText || '未知错误'}`);
+      } else if (typedError.request) {
+        // 请求已发送但没有收到响应
+        throw new Error('GLM API 无响应，请检查网络连接或 API 服务状态');
+      } else {
+        // 请求配置出错
+        throw new Error(`GLM API 请求配置错误: ${errorMessage}`);
+      }
     } else {
-      // 请求配置出错
-      throw new Error(`GLM API 请求配置错误: ${typedError.message}`);
+      // 其他类型的错误
+      throw new Error(`GLM API 调用失败: ${errorMessage}`);
     }
   }
 };

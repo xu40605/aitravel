@@ -72,7 +72,14 @@ const validateItinerary = (itinerary: any): boolean => {
 const runTestCase = async (testCase: PlannerRequest, index: number): Promise<boolean> => {
   console.log(`\n=== 开始运行测试用例 ${index + 1} ===`);
   console.log(`测试内容: ${testCase.travelers}人前往${testCase.destination}，从${testCase.startDate}到${testCase.endDate}，预算${testCase.budget}元`);
-  console.log(`偏好: ${testCase.preferences?.join('、') || '无'}`);
+  const preferencesDisplay = testCase.preferences 
+    ? typeof testCase.preferences === 'string' 
+      ? testCase.preferences 
+      : Array.isArray(testCase.preferences) 
+        ? testCase.preferences.join('、') 
+        : String(testCase.preferences)
+    : '无';
+  console.log(`偏好: ${preferencesDisplay}`);
 
   try {
       // 构建提示词

@@ -144,3 +144,97 @@ export const generateItinerary = async (request: PlannerRequest): Promise<Planne
     };
   }
 };
+
+// 保存行程规划的请求接口
+export interface SaveItineraryRequest {
+  name: string;
+  itinerary: Itinerary;
+}
+
+// 保存行程规划的响应接口
+export interface SaveItineraryResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    id: string;
+    name: string;
+    createdAt: string;
+  } & Itinerary;
+}
+
+// 保存行程规划的API调用
+export const saveItinerary = async (request: SaveItineraryRequest): Promise<SaveItineraryResponse> => {
+  try {
+    const response = await api.post<SaveItineraryResponse>('/planner/save', request);
+    return response.data;
+  } catch (error) {
+    console.error('保存行程失败:', error);
+    if (axios.isAxiosError(error)) {
+      return {
+        success: false,
+        message: error.response?.data?.message || '保存失败，请稍后重试',
+      };
+    }
+    return {
+      success: false,
+      message: '保存失败，请稍后重试',
+    };
+  }
+};
+
+// 获取行程列表的响应接口
+export interface GetItinerariesResponse {
+  success: boolean;
+  message?: string;
+  data?: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+  } & Itinerary>;
+}
+
+// 获取行程列表的API调用
+export const getItineraries = async (): Promise<GetItinerariesResponse> => {
+  try {
+    const response = await api.get<GetItinerariesResponse>('/planner/list');
+    return response.data;
+  } catch (error) {
+    console.error('获取行程列表失败:', error);
+    if (axios.isAxiosError(error)) {
+      return {
+        success: false,
+        message: error.response?.data?.message || '获取失败，请稍后重试',
+      };
+    }
+    return {
+      success: false,
+      message: '获取失败，请稍后重试',
+    };
+  }
+};
+
+// 删除行程的响应接口
+export interface DeleteItineraryResponse {
+  success: boolean;
+  message?: string;
+}
+
+// 删除行程的API调用
+export const deleteItinerary = async (id: string): Promise<DeleteItineraryResponse> => {
+  try {
+    const response = await api.delete<DeleteItineraryResponse>(`/planner/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('删除行程失败:', error);
+    if (axios.isAxiosError(error)) {
+      return {
+        success: false,
+        message: error.response?.data?.message || '删除失败，请稍后重试',
+      };
+    }
+    return {
+      success: false,
+      message: '删除失败，请稍后重试',
+    };
+  }
+};

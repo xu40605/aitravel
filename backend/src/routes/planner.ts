@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { PlannerRequest, PlannerResponse, Itinerary } from '../types/planner';
 import { buildPlannerPrompt } from '../services/promptBuilder';
 import { callGLM } from '../services/llmClient';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
+import { createClient } from '@supabase/supabase-js';
 import supabase from '../config/supabase';
 import { authMiddleware } from '../middleware/auth';
 
@@ -120,12 +121,13 @@ router.post('/generate', validatePlannerRequest, async (req: Request, res: Respo
     logger.info('行程规划成功完成', { destination: userInput.destination, hasParsedData: !!parsedItinerary });
     res.status(200).json(response);
   } catch (error) {
-    logger.error(`行程规划失败: ${(error as Error).message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error || '未知错误');
+    logger.error(`行程规划失败: ${errorMessage}`);
     
     // 返回统一格式的错误响应
     res.status(500).json({
       success: false,
-      message: (error as Error).message || '生成行程计划失败'
+      message: errorMessage || '生成行程计划失败'
     });
   }
 });
@@ -135,17 +137,39 @@ router.post('/generate', validatePlannerRequest, async (req: Request, res: Respo
  */
 router.post('/save', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    // 使用req.user.userId确保类型安全
+    const userId = req.user?.userId;
+    
+    // 验证用户是否已认证
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: '用户未认证或令牌无效'
+      });
+      return;
+    }
+    
     const { name, itinerary } = req.body;
     
     if (!name || !itinerary) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: '缺少必要的请求参数'
       });
+      return;
     }
 
-    // 保存到数据库
+    // 验证行程数据的必要字段
+    if (!itinerary.destination || !itinerary.startDate || !itinerary.endDate) {
+      res.status(400).json({
+        success: false,
+        message: '行程数据缺少必要字段'
+      });
+      return;
+    }
+
+    // 服务密钥创建的Supabase客户端应该默认可以绕过RLS
+    // 确保user_id正确设置，与JWT中的用户ID匹配
     const { data, error } = await supabase
       .from('itineraries')
       .insert({
@@ -157,11 +181,21 @@ router.post('/save', authMiddleware, async (req: Request, res: Response): Promis
         end_date: itinerary.endDate
       })
       .select()
-      .single();
+      .single()
 
     if (error) {
       logger.error(`保存行程失败: ${error.message}`);
-      return res.status(500).json({
+      res.status(500).json({
+        success: false,
+        message: '保存行程失败'
+      });
+      return;
+    }
+
+    // 确保data不为null
+    if (!data) {
+      logger.error('保存行程失败: 返回数据为空');
+      res.status(500).json({
         success: false,
         message: '保存行程失败'
       });
@@ -205,7 +239,7 @@ router.get('/list', authMiddleware, async (req: Request, res: Response): Promise
 
     if (error) {
       logger.error(`获取行程列表失败: ${error.message}`);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: '获取行程列表失败'
       });
@@ -250,13 +284,13 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
 
     if (checkError) {
       if (checkError.code === 'PGRST116') { // Record not found
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           message: '行程不存在'
         });
       }
       logger.error(`检查行程失败: ${checkError.message}`);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: '操作失败'
       });
@@ -270,7 +304,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
 
     if (deleteError) {
       logger.error(`删除行程失败: ${deleteError.message}`);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: '删除行程失败'
       });

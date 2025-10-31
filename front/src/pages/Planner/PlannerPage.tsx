@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Divider, Alert, List, Tag } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Divider, Alert, List, Tag, Modal } from 'antd';
 import dayjs from 'dayjs';
-import { AudioOutlined } from '@ant-design/icons';
-import { generateItinerary, type PlannerRequest, type Itinerary, type Activity } from '../../api/planner';
+import { AudioOutlined, SaveOutlined } from '@ant-design/icons';
+import { generateItinerary, saveItinerary, type PlannerRequest, type Itinerary, type SaveItineraryRequest } from '../../api/planner';
 import { VoiceInput } from '../../components/voice/VoiceInput';
 
 const { Content } = Layout;
@@ -15,12 +15,18 @@ class PlannerPageBuilder {
   private onVoiceInputChange: (text: string) => void = () => {};
   private onShowVoiceInput: (fieldKey: string) => void = () => {};
   private isSubmitting: boolean = false;
-  // 移除未使用的属性
+  private isSaving: boolean = false;
+  private showSaveModal: boolean = false;
+  private itineraryName: string = '';
   private showVoiceModal: { [key: string]: boolean } = {};
   private itinerary: Itinerary | null = null;
+  private isFirstRender: { current: boolean } = { current: true };
   private stateUpdaters: {
     setIsSubmitting?: (value: boolean) => void;
     setItinerary?: (value: Itinerary | null) => void;
+    setIsSaving?: (value: boolean) => void;
+    setShowSaveModal?: (value: boolean) => void;
+    setItineraryName?: (value: string) => void;
   } = {};
 
   setForm(form: any): PlannerPageBuilder {
@@ -61,8 +67,35 @@ class PlannerPageBuilder {
   setStateUpdaters(updaters: {
     setIsSubmitting?: (value: boolean) => void;
     setItinerary?: (value: Itinerary | null) => void;
+    setIsSaving?: (value: boolean) => void;
+    setShowSaveModal?: (value: boolean) => void;
+    setItineraryName?: (value: string) => void;
   }): PlannerPageBuilder {
     this.stateUpdaters = updaters;
+    return this;
+  }
+
+  setIsSaving(saving: boolean): PlannerPageBuilder {
+    this.isSaving = saving;
+    if (this.stateUpdaters.setIsSaving) {
+      this.stateUpdaters.setIsSaving(saving);
+    }
+    return this;
+  }
+
+  setShowSaveModal(show: boolean): PlannerPageBuilder {
+    this.showSaveModal = show;
+    if (this.stateUpdaters.setShowSaveModal) {
+      this.stateUpdaters.setShowSaveModal(show);
+    }
+    return this;
+  }
+
+  setItineraryName(name: string): PlannerPageBuilder {
+    this.itineraryName = name;
+    if (this.stateUpdaters.setItineraryName) {
+      this.stateUpdaters.setItineraryName(name);
+    }
     return this;
   }
 
@@ -215,6 +248,70 @@ class PlannerPageBuilder {
     );
   }
 
+  handleSaveItinerary = async () => {
+    if (!this.itinerary || !this.itineraryName.trim()) {
+      message.error('请输入有效的行程名称');
+      return;
+    }
+
+    try {
+      this.setIsSaving(true);
+      const request: SaveItineraryRequest = {
+        name: this.itineraryName.trim(),
+        itinerary: this.itinerary
+      };
+
+      const response = await saveItinerary(request);
+      
+      if (response.success) {
+        message.success('行程保存成功！');
+        this.setShowSaveModal(false);
+        this.setItineraryName('');
+        // 可以跳转到我的计划页面或做其他操作
+      } else {
+        message.error(response.message || '行程保存失败，请稍后重试');
+      }
+    } catch (error) {
+      console.error('保存行程失败:', error);
+      message.error('网络错误，请稍后重试');
+    } finally {
+      this.setIsSaving(false);
+    }
+  };
+
+  buildSaveModal() {
+    return (
+      <Modal
+        title="保存旅行计划"
+        open={this.showSaveModal}
+        onOk={this.handleSaveItinerary}
+        onCancel={() => {
+          this.setShowSaveModal(false);
+          this.setItineraryName('');
+        }}
+        okButtonProps={{ loading: this.isSaving }}
+        cancelButtonProps={{ disabled: this.isSaving }}
+      >
+        <Form.Item
+          label="计划名称"
+          required
+          tooltip="请为您的旅行计划起一个名字"
+        >
+          <Input
+            placeholder="例如：北京五日游"
+            value={this.itineraryName}
+            onChange={(e) => this.setItineraryName(e.target.value)}
+            onPressEnter={this.handleSaveItinerary}
+            disabled={this.isSaving}
+          />
+        </Form.Item>
+        <Paragraph type="secondary">
+          保存后，您可以在「我的旅行计划」页面查看和管理此行程
+        </Paragraph>
+      </Modal>
+    );
+  }
+
   buildItineraryDisplay() {
     if (this.isSubmitting) {
       return (
@@ -230,7 +327,20 @@ class PlannerPageBuilder {
       return (
         <div className="itinerary-content" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           {/* 行程概览卡片 */}
-          <Card size="small" className="mb-4">
+          <Card 
+            size="small" 
+            className="mb-4"
+            extra={
+              <Button 
+                type="primary" 
+                icon={<SaveOutlined />}
+                onClick={() => this.setShowSaveModal(true)}
+                disabled={this.isSaving}
+              >
+                保存计划
+              </Button>
+            }
+          >
             <Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>{this.itinerary.destination} 旅行计划</Title>
             <Row gutter={[16, 8]}>
               <Col span={12}>
@@ -465,7 +575,7 @@ class PlannerPageBuilder {
                   layout="vertical"
                   onValuesChange={(changedValues, allValues) => {
                     // 避免首次渲染时触发
-                    if (isFirstRender.current) return;
+                    if (this.isFirstRender.current) return;
                     
                     console.log('表单值变化:', changedValues, allValues);
                     // 实时保存表单数据，排除日期对象
@@ -516,10 +626,10 @@ class PlannerPageBuilder {
                         budget: Number(values.budget),
                         preferences: values.preferences?.trim(),
                       };
-                       
+                        
                       this.setIsSubmitting(true);
                       message.loading('正在生成行程计划，请稍候...', 0);
-                       
+                        
                       try {
                         const response = await generateItinerary(requestData);
                         
@@ -588,6 +698,7 @@ class PlannerPageBuilder {
             </Col>
           </Row>
           {this.buildVoiceModal()}
+          {this.buildSaveModal()}
         </Content>
       </Layout>
     );
@@ -597,10 +708,12 @@ class PlannerPageBuilder {
 const PlannerPage: React.FC = () => {
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [itineraryName, setItineraryName] = useState('');
   const [showVoiceModal, setShowVoiceModal] = useState<{ [key: string]: boolean }>({});
   const [voiceFieldKey, setVoiceFieldKey] = useState<string>('');
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const isFirstRender = useRef(true);
   
   // 从localStorage加载保存的数据
   useEffect(() => {
@@ -628,10 +741,9 @@ const PlannerPage: React.FC = () => {
         console.error('加载行程数据失败:', error);
       }
     }
-    
-    // 加载完成后设置标志
-    isFirstRender.current = false;
   }, [form]);
+
+
   
   // 组件卸载前保存表单数据
   useEffect(() => {
@@ -658,26 +770,24 @@ const PlannerPage: React.FC = () => {
   // 定期保存表单数据作为额外保障
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isFirstRender.current) {
-        try {
-          const formValues = form.getFieldsValue();
-          if (formValues) {
-            const formDataToSave = {
-              destination: formValues.destination,
-              travelers: formValues.travelers,
-              budget: formValues.budget,
-              preferences: formValues.preferences
-            };
-            localStorage.setItem('plannerFormData', JSON.stringify(formDataToSave));
-          }
-        } catch (error) {
-          console.error('定期保存表单数据失败:', error);
+      try {
+        const formValues = form.getFieldsValue();
+        if (formValues) {
+          const formDataToSave = {
+            destination: formValues.destination,
+            travelers: formValues.travelers,
+            budget: formValues.budget,
+            preferences: formValues.preferences
+          };
+          localStorage.setItem('plannerFormData', JSON.stringify(formDataToSave));
         }
+      } catch (error) {
+        console.error('定期保存表单数据失败:', error);
       }
     }, 5000); // 每5秒保存一次
     
     return () => clearInterval(interval);
-  }, [form, isFirstRender]);
+  }, [form]);
   
   // 保存行程数据到localStorage
   useEffect(() => {
@@ -720,6 +830,9 @@ const PlannerPage: React.FC = () => {
   const builder = new PlannerPageBuilder()
     .setForm(form)
     .setIsSubmitting(isSubmitting)
+    .setIsSaving(isSaving)
+    .setShowSaveModal(showSaveModal)
+    .setItineraryName(itineraryName)
     .setVoiceFieldKey(voiceFieldKey)
     .setShowVoiceModal(showVoiceModal)
     .setItinerary(itinerary)
@@ -728,7 +841,10 @@ const PlannerPage: React.FC = () => {
     // 添加状态更新器
     .setStateUpdaters({
       setIsSubmitting,
-      setItinerary
+      setItinerary,
+      setIsSaving,
+      setShowSaveModal,
+      setItineraryName
     });
 
   return builder.build();

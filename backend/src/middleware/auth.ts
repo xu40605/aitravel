@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 
 interface JwtPayload {
   userId: string;
@@ -38,7 +38,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
     req.user = decoded;
     next();
   } catch (error) {
-    logger.error('认证失败:', error);
+    logger.error('认证失败:', error instanceof Error ? { message: error.message } : { error });
     
     if (error instanceof jwt.TokenExpiredError) {
       return res.status(401).json({

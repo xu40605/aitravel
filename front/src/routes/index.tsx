@@ -5,6 +5,7 @@ import VoiceRecognition from '../pages/VoiceRecognition';
 import PlannerPage from '../pages/Planner/PlannerPage';
 import MyPlansPage from '../pages/MyPlans/MyPlansPage';
 import ProfilePage from '../pages/Profile/ProfilePage';
+import ExpenseManagement from '../pages/ExpenseManagement';
 import { PrivateRoute } from './PrivateRoute';
 import MainLayout from '../layout/MainLayout';
 
@@ -32,6 +33,7 @@ const AppRoutes = () => {
         <Route path="planner" element={<PlannerPage />} />
         <Route path="my-plans" element={<MyPlansPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="itineraries/:itineraryId/expenses" element={<ExpenseManagement />} />
       </Route>
       
       {/* Default redirect to login if not authenticated */}

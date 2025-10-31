@@ -112,7 +112,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('登录失败:', error);
+    logger.error('登录失败:', error instanceof Error ? { message: error.message } : { error });
     
     return res.status(500).json({
       success: false,
@@ -149,7 +149,7 @@ router.get('/user/profile', authMiddleware, async (req, res) => {
       data: user
     });
   } catch (error) {
-    logger.error('获取用户资料失败:', error);
+    logger.error('获取用户资料失败:', error instanceof Error ? { message: error.message } : { error });
     
     return res.status(500).json({
       success: false,
@@ -183,7 +183,7 @@ router.put('/user/profile', authMiddleware, async (req, res) => {
       data: updatedUser
     });
   } catch (error) {
-    logger.error('更新用户资料失败:', error);
+    logger.error('更新用户资料失败:', error instanceof Error ? { message: error.message } : { error });
     
     return res.status(400).json({
       success: false,

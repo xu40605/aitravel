@@ -16,8 +16,8 @@ export const buildPlannerPrompt = (userInput: PlannerRequest): string => {
   } = userInput;
 
   // 构建偏好描述
-  const preferencesStr = preferences && preferences.trim() 
-    ? `用户特别偏好: ${typeof preferences === 'string' ? preferences : preferences.join('、')}`
+  const preferencesStr = preferences 
+    ? `用户特别偏好: ${typeof preferences === 'string' ? preferences.trim() : (Array.isArray(preferences) ? preferences.join('、') : String(preferences))}`
     : '用户没有特别偏好，推荐经典景点和活动';
 
   // 计算旅行天数
