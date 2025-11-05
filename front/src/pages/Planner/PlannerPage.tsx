@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Divider, Alert, List, Tag, Modal } from 'antd';
+import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Divider, Alert, List, Tag, Modal, Tabs } from 'antd';
 import dayjs from 'dayjs';
 import { AudioOutlined, SaveOutlined } from '@ant-design/icons';
 import { generateItinerary, saveItinerary, type PlannerRequest, type Itinerary, type SaveItineraryRequest } from '../../api/planner';
@@ -324,228 +324,246 @@ class PlannerPageBuilder {
     }
 
     if (this.itinerary) {
-      return (
-        <div className="itinerary-content" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          {/* 行程概览卡片 */}
-          <Card 
-            size="small" 
-            className="mb-4"
-            extra={
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />}
-                onClick={() => this.setShowSaveModal(true)}
-                disabled={this.isSaving}
+      // 构建标签页数据
+      const tabItems = [
+        {
+          key: 'overview',
+          label: '总览',
+          children: (
+            <div className="itinerary-overview" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* 行程概览卡片 */}
+              <Card 
+                size="small" 
+                className="mb-4"
+                extra={
+                  <Button 
+                    type="primary" 
+                    icon={<SaveOutlined />}
+                    onClick={() => this.setShowSaveModal(true)}
+                    disabled={this.isSaving}
+                  >
+                    保存计划
+                  </Button>
+                }
               >
-                保存计划
-              </Button>
-            }
-          >
-            <Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>{this.itinerary.destination} 旅行计划</Title>
-            <Row gutter={[16, 8]}>
-              <Col span={12}>
-                <Paragraph style={{ margin: 0 }}>
-                  <strong>日期：</strong>{this.itinerary.startDate} 至 {this.itinerary.endDate}
-                </Paragraph>
-                <Paragraph style={{ margin: 0 }}>
-                  <strong>人数：</strong>{this.itinerary.travelers}人
-                </Paragraph>
-              </Col>
-              <Col span={12}>
-                <Paragraph style={{ margin: 0 }}>
-                  <strong>预算：</strong>¥{this.itinerary.budget}
-                </Paragraph>
-                {this.itinerary.estimatedBudget && (
-                  <Paragraph style={{ margin: 0, color: '#1890ff' }}>
-                    <strong>预计花费：</strong>¥{this.itinerary.estimatedBudget}
+                <Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>{this.itinerary.destination} 旅行计划</Title>
+                <Row gutter={[16, 8]}>
+                  <Col span={12}>
+                    <Paragraph style={{ margin: 0 }}>
+                      <strong>日期：</strong>{this.itinerary.startDate} 至 {this.itinerary.endDate}
+                    </Paragraph>
+                    <Paragraph style={{ margin: 0 }}>
+                      <strong>人数：</strong>{this.itinerary.travelers}人
+                    </Paragraph>
+                  </Col>
+                  <Col span={12}>
+                    <Paragraph style={{ margin: 0 }}>
+                      <strong>预算：</strong>¥{this.itinerary.budget}
+                    </Paragraph>
+                    {this.itinerary.estimatedBudget && (
+                      <Paragraph style={{ margin: 0, color: '#1890ff' }}>
+                        <strong>预计花费：</strong>¥{this.itinerary.estimatedBudget}
+                      </Paragraph>
+                    )}
+                  </Col>
+                </Row>
+                {this.itinerary.preferences && (
+                  <Paragraph style={{ marginBottom: 0, marginTop: 8 }}>
+                    <strong>偏好：</strong>{this.itinerary.preferences}
                   </Paragraph>
                 )}
-              </Col>
-            </Row>
-            {this.itinerary.preferences && (
-              <Paragraph style={{ marginBottom: 0, marginTop: 8 }}>
-                <strong>偏好：</strong>{this.itinerary.preferences}
-              </Paragraph>
-            )}
-            {this.itinerary.summary && (
-              <Alert
-                message="行程总结和建议"
-                description={this.itinerary.summary}
-                type="info"
-                showIcon
-                style={{ marginTop: 16 }}
-              />
-            )}
-            
-            {/* 住宿总体建议 */}
-            {this.itinerary.accommodationSummary && (
-              <Alert
-                message="住宿总体建议"
-                description={this.itinerary.accommodationSummary}
-                type="warning"
-                showIcon
-                style={{ marginTop: 16 }}
-              />
-            )}
-            
-            {/* 交通总体建议 */}
-            {this.itinerary.transportationSummary && (
-              <Alert
-                message="交通总体建议"
-                description={this.itinerary.transportationSummary}
-                type="success"
-                showIcon
-                style={{ marginTop: 16 }}
-              />
-            )}
-            
-            {/* 美食总体建议 */}
-            {this.itinerary.diningSummary && (
-              <Alert
-                message="美食总体建议"
-                description={this.itinerary.diningSummary}
-                type="info"
-                showIcon
-                style={{ marginTop: 16 }}
-              />
-            )}
-            
-            {/* 实用建议 */}
-            {this.itinerary.tips && this.itinerary.tips.length > 0 && (
-              <Card size="small" title="实用建议" style={{ marginTop: 16 }}>
-                <List
-                  dataSource={this.itinerary.tips}
-                  renderItem={(tip, index) => (
-                    <List.Item>
-                      <span style={{ marginRight: 8 }}>{index + 1}.</span>
-                      {tip}
-                    </List.Item>
-                  )}
-                />
+                {this.itinerary.summary && (
+                  <Alert
+                    message="行程总结和建议"
+                    description={this.itinerary.summary}
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                )}
+                
+                {/* 住宿总体建议 */}
+                {this.itinerary.accommodationSummary && (
+                  <Alert
+                    message="住宿总体建议"
+                    description={this.itinerary.accommodationSummary}
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                )}
+                
+                {/* 交通总体建议 */}
+                {this.itinerary.transportationSummary && (
+                  <Alert
+                    message="交通总体建议"
+                    description={this.itinerary.transportationSummary}
+                    type="success"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                )}
+                
+                {/* 美食总体建议 */}
+                {this.itinerary.diningSummary && (
+                  <Alert
+                    message="美食总体建议"
+                    description={this.itinerary.diningSummary}
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                )}
+                
+                {/* 实用建议 */}
+                {this.itinerary.tips && this.itinerary.tips.length > 0 && (
+                  <Card size="small" title="实用建议" style={{ marginTop: 16 }}>
+                    <List
+                      dataSource={this.itinerary.tips}
+                      renderItem={(tip, index) => (
+                        <List.Item>
+                          <span style={{ marginRight: 8 }}>{index + 1}.</span>
+                          {tip}
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                )}
               </Card>
-            )}
-          </Card>
-          
-          <Divider orientation="left" style={{ fontWeight: 'bold' }}>详细行程</Divider>
-          
-          {/* 每日行程卡片 */}
-          {this.itinerary.days.map((day) => (
-            <Card 
-              key={day.day} 
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>第{day.day}天</span>
-                  {day.date && <Tag color="blue">{day.date}</Tag>}
-                </div>
-              }
-              className="mb-4"
-              size="small"
-            >
-              {/* 当日概要 */}
-              {day.summary && (
-                <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-                  <strong>今日概要：</strong>{day.summary}
-                </Paragraph>
-              )}
-              
-              {/* 按时间顺序展示所有活动（包含景点、交通、餐厅、住宿） */}
+            </div>
+          )
+        },
+        // 为每天创建一个标签页
+        ...this.itinerary.days.map((day) => ({
+          key: `day-${day.day}`,
+          label: `第 ${day.day} 天`,
+          children: (
+            <div className="day-itinerary" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               <Card 
-                type="inner" 
-                title="按时间顺序的行程安排" 
+                key={day.day} 
                 size="small"
               >
-                <List
-                  dataSource={day.activities}
-                  renderItem={(activity, actIndex) => (
-                    <List.Item 
-                      key={actIndex} 
-                      className="activity-item"
-                      style={{ 
-                        borderBottom: actIndex < day.activities.length - 1 ? '1px solid #f0f0f0' : 'none', 
-                        paddingBottom: 16, 
-                        marginBottom: 16 
-                      }}
-                    >
-                      <List.Item.Meta
-                        title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                            <Tag color="blue">{activity.time}</Tag>
-                            {activity.type === '交通' && <Tag color="cyan">{activity.transportType || activity.type}</Tag>}
-                            {activity.type === '餐厅' && <Tag color="red">{activity.type} ({activity.mealType})</Tag>}
-                            {activity.type === '住宿' && <Tag color="green">{activity.type}</Tag>}
-                            {activity.type === '景点' && <Tag color="orange">{activity.type}</Tag>}
-                            {!['交通', '餐厅', '住宿', '景点'].includes(activity.type) && 
-                              <Tag color="purple">{activity.type}</Tag>
-                            }
-                            <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{activity.name}</span>
-                          </div>
-                        }
-                        description={
-                          <div>
-                            <Paragraph style={{ marginBottom: 8 }}>{activity.description}</Paragraph>
-                            
-                            {/* 交通活动特有信息 */}
-                            {activity.type === '交通' && activity.departure && activity.destination && (
-                              <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#f0f8ff', borderRadius: 4 }}>
-                                <Paragraph style={{ margin: 0, fontSize: '14px' }}>
-                                  <strong>路线：</strong>{activity.departure} → {activity.destination}
-                                </Paragraph>
-                                {activity.route && (
-                                  <Paragraph style={{ margin: 0, fontSize: '14px' }}>
-                                    <strong>详细路线：</strong>{activity.route}
-                                  </Paragraph>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* 住宿活动特有信息 */}
-                            {activity.type === '住宿' && activity.checkInTime && (
-                              <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#e6f7ff', borderRadius: 4 }}>
-                                <Paragraph style={{ margin: 0, fontSize: '14px' }}>
-                                  <strong>入住/退房：</strong>{activity.checkInTime} / {activity.checkOutTime || '次日12:00'}
-                                </Paragraph>
-                              </div>
-                            )}
-                            
-                            {/* 餐厅活动特有信息 */}
-                            {activity.type === '餐厅' && activity.cuisine && (
-                              <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#fff2e8', borderRadius: 4 }}>
-                                <Paragraph style={{ margin: 0, fontSize: '14px' }}>
-                                  <strong>菜系：</strong>{activity.cuisine}
-                                </Paragraph>
-                                {activity.recommendedDishes && activity.recommendedDishes.length > 0 && (
-                                  <Paragraph style={{ margin: 0, fontSize: '14px' }}>
-                                    <strong>推荐菜品：</strong>
-                                    {activity.recommendedDishes.map((dish, dishIndex) => (
-                                      <Tag key={dishIndex} color="pink" style={{ marginLeft: 4, marginRight: 4 }}>{dish}</Tag>
-                                    ))}
-                                  </Paragraph>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* 通用信息标签 */}
-                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-                              {activity.location && (
-                                <Tag color="purple">地点：{activity.location}</Tag>
-                              )}
-                              {activity.duration && (
-                                <Tag color="blue">时长：{activity.duration}</Tag>
-                              )}
-                              {activity.cost && (
-                                <Tag color="red">花费：{typeof activity.cost === 'number' ? '¥' + activity.cost : activity.cost}</Tag>
-                              )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <h3 style={{ margin: 0 }}>第{day.day}天</h3>
+                  {day.date && <Tag color="blue">{day.date}</Tag>}
+                </div>
+                
+                {/* 当日概要 */}
+                {day.summary && (
+                  <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                    <strong>今日概要：</strong>{day.summary}
+                  </Paragraph>
+                )}
+                
+                {/* 按时间顺序展示所有活动（包含景点、交通、餐厅、住宿） */}
+                <Card 
+                  type="inner" 
+                  title="按时间顺序的行程安排" 
+                  size="small"
+                >
+                  <List
+                    dataSource={day.activities}
+                    renderItem={(activity, actIndex) => (
+                      <List.Item 
+                        key={actIndex} 
+                        className="activity-item"
+                        style={{ 
+                          borderBottom: actIndex < day.activities.length - 1 ? '1px solid #f0f0f0' : 'none', 
+                          paddingBottom: 16, 
+                          marginBottom: 16 
+                        }}
+                      >
+                        <List.Item.Meta
+                          title={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                              <Tag color="blue">{activity.time}</Tag>
+                              {activity.type === '交通' && <Tag color="cyan">{activity.transportType || activity.type}</Tag>}
+                              {activity.type === '餐厅' && <Tag color="red">{activity.type} ({activity.mealType})</Tag>}
+                              {activity.type === '住宿' && <Tag color="green">{activity.type}</Tag>}
+                              {activity.type === '景点' && <Tag color="orange">{activity.type}</Tag>}
+                              {!['交通', '餐厅', '住宿', '景点'].includes(activity.type) && 
+                                <Tag color="purple">{activity.type}</Tag>
+                              }
+                              <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{activity.name}</span>
                             </div>
-                          </div>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                          }
+                          description={
+                            <div>
+                              <Paragraph style={{ marginBottom: 8 }}>{activity.description}</Paragraph>
+                              
+                              {/* 交通活动特有信息 */}
+                              {activity.type === '交通' && activity.departure && activity.destination && (
+                                <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#f0f8ff', borderRadius: 4 }}>
+                                  <Paragraph style={{ margin: 0, fontSize: '14px' }}>
+                                    <strong>路线：</strong>{activity.departure} → {activity.destination}
+                                  </Paragraph>
+                                  {activity.route && (
+                                    <Paragraph style={{ margin: 0, fontSize: '14px' }}>
+                                      <strong>详细路线：</strong>{activity.route}
+                                    </Paragraph>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* 住宿活动特有信息 */}
+                              {activity.type === '住宿' && activity.checkInTime && (
+                                <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#e6f7ff', borderRadius: 4 }}>
+                                  <Paragraph style={{ margin: 0, fontSize: '14px' }}>
+                                    <strong>入住/退房：</strong>{activity.checkInTime} / {activity.checkOutTime || '次日12:00'}
+                                  </Paragraph>
+                                </div>
+                              )}
+                              
+                              {/* 餐厅活动特有信息 */}
+                              {activity.type === '餐厅' && activity.cuisine && (
+                                <div style={{ marginBottom: 8, padding: 8, backgroundColor: '#fff2e8', borderRadius: 4 }}>
+                                  <Paragraph style={{ margin: 0, fontSize: '14px' }}>
+                                    <strong>菜系：</strong>{activity.cuisine}
+                                  </Paragraph>
+                                  {activity.recommendedDishes && activity.recommendedDishes.length > 0 && (
+                                    <Paragraph style={{ margin: 0, fontSize: '14px' }}>
+                                      <strong>推荐菜品：</strong>
+                                      {activity.recommendedDishes.map((dish, dishIndex) => (
+                                        <Tag key={dishIndex} color="pink" style={{ marginLeft: 4, marginRight: 4 }}>{dish}</Tag>
+                                      ))}
+                                    </Paragraph>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* 通用信息标签 */}
+                              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                                {activity.location && (
+                                  <Tag color="purple">地点：{activity.location}</Tag>
+                                )}
+                                {activity.duration && (
+                                  <Tag color="blue">时长：{activity.duration}</Tag>
+                                )}
+                                {activity.cost && (
+                                  <Tag color="red">花费：{typeof activity.cost === 'number' ? '¥' + activity.cost : activity.cost}</Tag>
+                                )}
+                              </div>
+                            </div>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                </Card>
               </Card>
-            </Card>
-          ))}
-        </div>
+            </div>
+          )
+        }))
+      ];
+
+      return (
+        <Tabs
+          defaultActiveKey="overview"
+          items={tabItems}
+          type="card"
+          tabBarStyle={{ marginBottom: '20px' }}
+          size="large"
+        />
       );
     }
 
