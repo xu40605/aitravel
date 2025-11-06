@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Divider, Alert, List, Tag, Modal, Tabs } from 'antd';
+import { Layout, Row, Col, Form, Input, InputNumber, DatePicker, Button, Card, Spin, message, Typography, Empty, Alert, List, Tag, Modal, Tabs } from 'antd';
+import MapComponent from '../../components/itinerary/MapComponent';
 import dayjs from 'dayjs';
 import { AudioOutlined, SaveOutlined } from '@ant-design/icons';
 import { generateItinerary, saveItinerary, type PlannerRequest, type Itinerary, type SaveItineraryRequest } from '../../api/planner';
@@ -278,6 +279,12 @@ class PlannerPageBuilder {
       this.setIsSaving(false);
     }
   };
+
+  buildMapComponent(): React.ReactNode {
+    return (
+      <MapComponent itinerary={this.itinerary} />
+    );
+  }
 
   buildSaveModal() {
     return (
@@ -585,9 +592,9 @@ class PlannerPageBuilder {
       <Layout className="min-h-screen">
         <Content className="p-6">
           <Row gutter={[24, 24]}>
-            {/* 左侧输入区域 - 40% 宽度 */}
-            <Col xs={24} md={10}>
-              <Card title="旅行信息输入" className="shadow-lg">
+            {/* 左侧旅行信息 - 20% 宽度 */}
+            <Col xs={24} md={5}>
+              <Card title="旅行信息" className="shadow-lg h-full">
                 <Form
                   form={this.form}
                   layout="vertical"
@@ -708,11 +715,16 @@ class PlannerPageBuilder {
               </Card>
             </Col>
             
-            {/* 右侧结果展示区域 - 60% 宽度 */}
-            <Col xs={24} md={14}>
-              <Card title="AI 生成的旅行计划" className="shadow-lg" style={{ height: '100%' }}>
+            {/* 中间旅行计划 - 40% 宽度 */}
+            <Col xs={24} md={10}>
+              <Card title="旅行计划" className="shadow-lg" style={{ height: '100%' }}>
                 {this.buildItineraryDisplay()}
               </Card>
+            </Col>
+            
+            {/* 右侧地图展示 - 40% 宽度 */}
+            <Col xs={24} md={9}>
+              {this.buildMapComponent()}
             </Col>
           </Row>
           {this.buildVoiceModal()}
