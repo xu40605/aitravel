@@ -14,7 +14,64 @@ declare global {
 const { Text } = Typography;
 const { Option } = Select;
 
-// 模拟坐标系统，用于演示
+// 坐标转换工具函数 - WGS84转BD-09
+// WGS84 -> GCJ02
+function wgs84ToGcj02(lng: number, lat: number): [number, number] {
+  const pi = 3.1415926535897932384626;
+  const a = 6378245.0;
+  const ee = 0.00669342162296594323;
+
+  const outOfChina = (lng: number, lat: number): boolean =>
+    lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+
+  if (outOfChina(lng, lat)) return [lng, lat];
+
+  let dlat = transformLat(lng - 105.0, lat - 35.0);
+  let dlng = transformLng(lng - 105.0, lat - 35.0);
+  const radlat = lat / 180.0 * pi;
+  let magic = Math.sin(radlat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * pi);
+  dlng = (dlng * 180.0) / (a / sqrtMagic * Math.cos(radlat) * pi);
+  const mglat = lat + dlat;
+  const mglng = lng + dlng;
+  return [mglng, mglat];
+}
+
+function transformLat(x: number, y: number): number {
+  let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+  ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+  return ret;
+}
+
+function transformLng(x: number, y: number): number {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+  ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+  return ret;
+}
+
+// GCJ02 -> BD09
+function gcj02ToBd09(lng: number, lat: number): [number, number] {
+  const xPi = Math.PI * 3000.0 / 180.0;
+  const z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * xPi);
+  const theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * xPi);
+  const bdLng = z * Math.cos(theta) + 0.0065;
+  const bdLat = z * Math.sin(theta) + 0.006;
+  return [bdLng, bdLat];
+}
+
+// WGS84 -> BD09 - 主要转换函数
+function wgs84ToBd09(lng: number, lat: number): [number, number] {
+  const [gcjLng, gcjLat] = wgs84ToGcj02(lng, lat);
+  return gcj02ToBd09(gcjLng, gcjLat);
+}
+
+// 模拟坐标系统，使用WGS84（GPS）坐标，将在渲染时自动转换为百度BD-09坐标
 const mockCoordinates: Record<string, {latitude: number, longitude: number}> = {
   '北京故宫': { latitude: 39.916345, longitude: 116.397155 },
   '北京颐和园': { latitude: 39.999894, longitude: 116.275158 },
@@ -31,25 +88,7 @@ const mockCoordinates: Record<string, {latitude: number, longitude: number}> = {
   '西安大雁塔': { latitude: 34.213225, longitude: 108.960388 }
 };
 
-// 为没有预定义坐标的地点生成默认坐标
-const getDefaultCoordinates = (name: string): {latitude: number, longitude: number} => {
-  // 使用景点名称生成相对固定的坐标，避免每次加载位置都不同
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  // 生成北京附近的随机坐标，确保在地图可视范围内
-  const baseLat = 39.9;
-  const baseLng = 116.4;
-  const latOffset = (hash % 100) / 1000;
-  const lngOffset = ((hash >> 8) % 100) / 1000;
-  
-  return {
-    latitude: baseLat + latOffset,
-    longitude: baseLng + lngOffset
-  };
-};
+// 注：已替换为基于城市的坐标生成函数 getCityBasedDefaultCoordinates
 
 interface MapComponentProps {
   itinerary: Itinerary | null;
@@ -315,14 +354,313 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
 
 
 
-  // 渲染地图标记
+  // 增强的地理编码功能，确保正确获取不同城市的景点坐标
+  const getCoordinatesByGeocoding = (address: string): Promise<{latitude: number, longitude: number}> => {
+    return new Promise((resolve) => {
+      console.log(`开始获取地点坐标: ${address}`);
+      
+      // 先检查是否有预定义坐标
+      if (mockCoordinates[address]) {
+        console.log(`使用预定义坐标: ${address}`);
+        resolve(mockCoordinates[address]);
+        return;
+      }
+      
+      // 为每个景点名称生成特定的偏移量，避免多个景点重叠
+      const getSpecificOffset = (name: string): {lat: number, lng: number} => {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+          hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        // 生成更明显的偏移量，确保不同景点有足够距离
+        return {
+          lat: ((hash % 500) / 10000) * (hash % 2 === 0 ? 1 : -1),
+          lng: (((hash >> 8) % 500) / 10000) * (hash % 3 === 0 ? 1 : -1)
+        };
+      };
+      
+      // 使用百度地图地理编码服务
+      if (window.BMap && typeof window.BMap.Geocoder === 'function') {
+        console.log(`使用百度地图地理编码服务查询: ${address}`);
+        const geocoder = new window.BMap.Geocoder();
+        
+        // 确保使用行程的目的地城市作为查询范围
+        const city = itinerary?.destination || '';
+        console.log(`当前行程目的地城市: ${city}`);
+        
+        // 设置超时处理
+        const timeoutId = setTimeout(() => {
+          console.log(`地理编码查询超时: ${address}，使用备用方案`);
+          // 使用基于城市的默认坐标并添加特定偏移
+          const defaultCoords = getCityBasedDefaultCoordinates(address);
+          const offset = getSpecificOffset(address);
+          resolve({
+            latitude: defaultCoords.latitude + offset.lat,
+            longitude: defaultCoords.longitude + offset.lng
+          });
+        }, 3000); // 3秒超时
+        
+        // 设置地理编码查询范围为当前行程城市
+        if (city) {
+          try {
+            // 设置城市范围参数，提高查询准确性
+            if (typeof geocoder.setLocation === 'function') {
+              geocoder.setLocation(city);
+              console.log(`已设置地理编码查询城市范围: ${city}`);
+            } else {
+              console.log('geocoder.setLocation 方法不可用');
+            }
+          } catch (e) {
+            console.log('设置城市范围失败，继续使用默认方式查询:', e);
+          }
+        }
+        
+        // 构建查询策略：使用多种方式尝试获取坐标
+        const queryStrategies = [
+          // 策略1: 城市+地址
+          () => {
+            const fullAddress = city ? `${city}${address}` : address;
+            console.log(`尝试策略1 - 完整地址: ${fullAddress}`);
+            return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
+              geocoder.getPoint(fullAddress, (point: any) => {
+                if (point) {
+                  console.log(`策略1成功: ${fullAddress} -> ${point.lng}, ${point.lat}`);
+                  resolve({ latitude: point.lat, longitude: point.lng });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+          },
+          
+          // 策略2: 单独查询地点名
+          () => {
+            console.log(`尝试策略2 - 单独地点名: ${address}`);
+            return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
+              geocoder.getPoint(address, (point: any) => {
+                if (point) {
+                  console.log(`策略2成功: ${address} -> ${point.lng}, ${point.lat}`);
+                  resolve({ latitude: point.lat, longitude: point.lng });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+          },
+          
+          // 策略3: 城市+景点
+          () => {
+            const scenicSpotAddress = city ? `${city}景点${address}` : `景点${address}`;
+            console.log(`尝试策略3 - 城市+景点: ${scenicSpotAddress}`);
+            return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
+              geocoder.getPoint(scenicSpotAddress, (point: any) => {
+                if (point) {
+                  console.log(`策略3成功: ${scenicSpotAddress} -> ${point.lng}, ${point.lat}`);
+                  resolve({ latitude: point.lat, longitude: point.lng });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+          }
+        ];
+        
+        // 依次尝试查询策略
+        const tryNextStrategy = async (index: number) => {
+          if (index >= queryStrategies.length) {
+            // 所有策略都失败，尝试POI搜索
+            console.log(`所有地理编码策略失败，尝试POI搜索: ${address}`);
+            
+            if (typeof window.BMap.LocalSearch === 'function') {
+              try {
+                const localSearch = new window.BMap.LocalSearch(city || '全国', {
+                  onSearchComplete: (results: any) => {
+                    clearTimeout(timeoutId);
+                    if (results && results.getNumPois() > 0) {
+                      const poi = results.getPoi(0);
+                      const poiPoint = poi.point;
+                      console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
+                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng });
+                    } else {
+                      console.log(`POI搜索也失败，使用基于城市的默认坐标`);
+                      const defaultCoords = getCityBasedDefaultCoordinates(address);
+                      const offset = getSpecificOffset(address);
+                      resolve({
+                        latitude: defaultCoords.latitude + offset.lat,
+                        longitude: defaultCoords.longitude + offset.lng
+                      });
+                    }
+                  }
+                });
+                
+                // 设置搜索结果数量限制
+                if (typeof localSearch.setSearchCompleteCallback === 'function') {
+                  localSearch.setSearchCompleteCallback((results: any) => {
+                    clearTimeout(timeoutId);
+                    if (results && results.getNumPois() > 0) {
+                      const poi = results.getPoi(0);
+                      const poiPoint = poi.point;
+                      console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
+                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng });
+                    } else {
+                      console.log(`POI搜索也失败，使用基于城市的默认坐标`);
+                      const defaultCoords = getCityBasedDefaultCoordinates(address);
+                      const offset = getSpecificOffset(address);
+                      resolve({
+                        latitude: defaultCoords.latitude + offset.lat,
+                        longitude: defaultCoords.longitude + offset.lng
+                      });
+                    }
+                  });
+                }
+                
+                // 执行POI搜索
+                localSearch.search(address);
+              } catch (poiError) {
+                clearTimeout(timeoutId);
+                console.log(`POI搜索失败:`, poiError);
+                const defaultCoords = getCityBasedDefaultCoordinates(address);
+                const offset = getSpecificOffset(address);
+                resolve({
+                  latitude: defaultCoords.latitude + offset.lat,
+                  longitude: defaultCoords.longitude + offset.lng
+                });
+              }
+            } else {
+              clearTimeout(timeoutId);
+              console.log(`POI搜索服务不可用，使用基于城市的默认坐标`);
+              const defaultCoords = getCityBasedDefaultCoordinates(address);
+              const offset = getSpecificOffset(address);
+              resolve({
+                latitude: defaultCoords.latitude + offset.lat,
+                longitude: defaultCoords.longitude + offset.lng
+              });
+            }
+            return;
+          }
+          
+          try {
+            const result = await queryStrategies[index]();
+            if (result) {
+              clearTimeout(timeoutId);
+              // 为结果添加微小偏移，避免多个标记重叠
+              const offset = getSpecificOffset(address);
+              resolve({
+                latitude: result.latitude + offset.lat * 0.5,  // 缩小偏移量
+                longitude: result.longitude + offset.lng * 0.5
+              });
+            } else {
+              tryNextStrategy(index + 1);
+            }
+          } catch (e) {
+            console.error(`策略 ${index + 1} 执行失败:`, e);
+            tryNextStrategy(index + 1);
+          }
+        };
+        
+        // 开始尝试第一个策略
+        tryNextStrategy(0);
+      } else {
+        console.log('地理编码服务不可用，使用城市默认坐标');
+        const defaultCoords = getCityBasedDefaultCoordinates(address);
+        const offset = getSpecificOffset(address);
+        resolve({
+          latitude: defaultCoords.latitude + offset.lat,
+          longitude: defaultCoords.longitude + offset.lng
+        });
+      }
+    });
+  };
+
+  // 增强的基于城市生成默认坐标函数，使用WGS84坐标，将在渲染时自动转换为百度BD-09坐标
+  const getCityBasedDefaultCoordinates = (name: string): {latitude: number, longitude: number} => {
+    // 获取行程目的地城市
+    const city = itinerary?.destination || '北京';
+    console.log(`为地点 ${name} 生成 ${city} 区域的默认坐标`);
+    
+    // 扩展支持更多城市的基准坐标
+    const cityBaseCoordinates: Record<string, {latitude: number, longitude: number}> = {
+      '北京': { latitude: 39.9, longitude: 116.4 },
+      '上海': { latitude: 31.23, longitude: 121.47 },
+      '广州': { latitude: 23.13, longitude: 113.26 },
+      '深圳': { latitude: 22.54, longitude: 114.06 },
+      '杭州': { latitude: 30.27, longitude: 120.15 },
+      '成都': { latitude: 30.57, longitude: 104.06 },
+      '西安': { latitude: 34.34, longitude: 108.94 },
+      '南京': { latitude: 32.06, longitude: 118.79 },
+      '武汉': { latitude: 30.59, longitude: 114.31 },
+      '重庆': { latitude: 29.56, longitude: 106.55 },
+      // 添加更多城市支持
+      '长沙': { latitude: 28.22, longitude: 112.94 },
+      '青岛': { latitude: 36.07, longitude: 120.38 },
+      '厦门': { latitude: 24.47, longitude: 118.08 },
+      '三亚': { latitude: 18.25, longitude: 109.51 },
+      '丽江': { latitude: 26.86, longitude: 100.25 },
+      '大理': { latitude: 25.60, longitude: 100.24 },
+      '拉萨': { latitude: 29.65, longitude: 91.11 },
+      '乌鲁木齐': { latitude: 43.82, longitude: 87.61 },
+      '哈尔滨': { latitude: 45.80, longitude: 126.53 },
+      '大连': { latitude: 38.92, longitude: 121.63 }
+    };
+    
+    // 使用城市基准坐标或尝试从行程中推断城市
+    let baseCoord = cityBaseCoordinates[city];
+    
+    // 如果没有找到城市坐标，尝试智能推断
+    if (!baseCoord && itinerary) {
+      console.log(`未找到城市 ${city} 的基准坐标，尝试从行程描述推断`);
+      
+      // 从行程描述中查找可能的城市关键词
+      const allActivities = itinerary.days.flatMap(day => day.activities);
+      const allText = allActivities.map(a => `${a.name} ${a.description}`).join(' ');
+      
+      // 检查是否包含其他城市关键词
+      for (const [cityName, coords] of Object.entries(cityBaseCoordinates)) {
+        if (allText.includes(cityName) && cityName !== city) {
+          console.log(`从行程描述中推断城市: ${cityName}`);
+          baseCoord = coords;
+          break;
+        }
+      }
+    }
+    
+    // 如果仍然没有找到，使用北京作为默认值
+    if (!baseCoord) {
+      console.log(`无法确定城市，使用北京作为默认坐标`);
+      baseCoord = cityBaseCoordinates['北京'];
+    }
+    
+    // 使用景点名称生成相对固定的坐标偏移
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // 生成基于城市的坐标，确保在城市可视范围内，增加偏移量以避免标记重叠
+    const latOffset = (hash % 200) / 1000;
+    const lngOffset = ((hash >> 8) % 200) / 1000;
+    
+    const result = {
+      latitude: baseCoord.latitude + latOffset,
+      longitude: baseCoord.longitude + lngOffset
+    };
+    
+    console.log(`生成默认坐标: ${result.latitude.toFixed(6)}, ${result.longitude.toFixed(6)}`);
+    return result;
+  };
+
+  // 渲染地图标记 - 增强版，使用前端手动WGS84到BD-09坐标转换算法，确保所有景点准确显示
   const renderMapPoints = async () => {
     if (!map || !selectedDayAttractions || !window.BMap) {
+      console.log('地图标记渲染条件不满足:', { map: !!map, attractions: !!selectedDayAttractions, BMap: !!window.BMap });
       return;
     }
     
+    console.log(`开始渲染地图标记，共有 ${selectedDayAttractions.length} 个景点`);
+    
     try {
       // 清除之前的标记
+      console.log('清除之前的地图标记');
       markers.current.forEach(marker => {
         try {
           map.removeOverlay(marker);
@@ -335,18 +673,49 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       // 添加标记
       const points: any[] = [];
       
-      selectedDayAttractions.forEach((item, index) => {
+      // 增强的坐标获取逻辑 - 为每个景点单独处理坐标获取，添加错误处理
+      for (let i = 0; i < selectedDayAttractions.length; i++) {
+        const item = selectedDayAttractions[i];
         try {
-          // 获取坐标，如果没有预定义则使用默认坐标
-          const coordinates = mockCoordinates[item.name] || getDefaultCoordinates(item.name);
-          const point = new window.BMap.Point(coordinates.longitude, coordinates.latitude);
-          points.push(point);
+          console.log(`处理景点 ${i + 1}: ${item.name}`);
+          
+          // 获取坐标，添加重试逻辑
+          let coordinates;
+          let retryCount = 0;
+          const maxRetries = 2;
+          
+          while (retryCount <= maxRetries) {
+            try {
+              coordinates = await getCoordinatesByGeocoding(item.name);
+              console.log(`成功获取坐标: ${item.name} -> ${coordinates.latitude}, ${coordinates.longitude}`);
+              break;
+            } catch (geoError) {
+              retryCount++;
+              console.warn(`获取坐标失败，正在重试 (${retryCount}/${maxRetries}):`, geoError);
+              if (retryCount > maxRetries) {
+                // 使用备用坐标
+                coordinates = getCityBasedDefaultCoordinates(item.name);
+                console.log(`使用备用坐标: ${item.name} -> ${coordinates.latitude}, ${coordinates.longitude}`);
+              }
+            }
+          }
+          
+          // 确保坐标有效
+          if (!coordinates) {
+            console.warn(`无法获取景点 ${item.name} 的有效坐标`);
+            continue;
+          }
+          
+          // 使用前端手动坐标转换算法，将WGS84坐标转换为BD-09坐标
+          const [bdLng, bdLat] = wgs84ToBd09(coordinates.longitude, coordinates.latitude);
+          const bdPoint = new window.BMap.Point(bdLng, bdLat);
+          points.push(bdPoint);
           
           // 创建标记
-          const marker = new window.BMap.Marker(point);
+          const marker = new window.BMap.Marker(bdPoint);
           
           // 自定义标记样式，添加序号
-          const label = new window.BMap.Label(`${index + 1}`, {
+          const label = new window.BMap.Label(`${i + 1}`, {
             offset: new window.BMap.Size(-10, -20)
           });
           label.setStyle({
@@ -363,29 +732,97 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           });
           marker.setLabel(label);
           
+          // 添加到地图
           map.addOverlay(marker);
           markers.current.push(marker);
           
           // 添加信息窗口
-          const description = `${index + 1}. ${item.name}\n时间: ${item.time || '未指定'}\n${item.description || '暂无描述'}`;
+          const description = `${i + 1}. ${item.name}\n时间: ${item.time || '未指定'}\n${item.description || '暂无描述'}\n坐标: ${bdLat.toFixed(6)}, ${bdLng.toFixed(6)} (BD-09转换)`;
           const infoWindow = new window.BMap.InfoWindow(description);
           marker.addEventListener('click', () => {
-            map.openInfoWindow(infoWindow, point);
+            map.openInfoWindow(infoWindow, bdPoint);
           });
+          
         } catch (e) {
           console.error(`添加标记失败 ${item.name}:`, e);
         }
-      });
-      
-      // 设置地图视野，确保所有标记可见
-      if (points.length > 0 && map) {
-        map.setViewport(points, {
-          margins: [50, 50, 50, 50]
-        });
-      } else if (points.length === 0 && itinerary) {
-        // 如果没有景点，显示默认位置
-        map.centerAndZoom(new window.BMap.Point(116.404, 39.915), 11);
       }
+      
+      // 增强的地图视野设置
+      if (points.length > 0 && map) {
+        console.log(`设置地图视野以显示 ${points.length} 个景点`);
+        
+        // 先尝试使用setViewport
+        try {
+          map.setViewport(points, {
+            margins: [50, 50, 50, 50],
+            maxZoom: 15,  // 设置最大缩放级别
+            minZoom: 8    // 设置最小缩放级别
+          });
+        } catch (viewportError) {
+          console.error('设置地图视野失败，使用备用方法:', viewportError);
+          
+          // 备用方法：计算中心点和适当的缩放级别
+          if (points.length === 1) {
+            // 单个点，设置适当的缩放级别
+            map.centerAndZoom(points[0], 13);
+          } else {
+            // 多个点，计算中心点
+            let totalLat = 0, totalLng = 0;
+            points.forEach(p => {
+              totalLat += p.lat;
+              totalLng += p.lng;
+            });
+            const centerLat = totalLat / points.length;
+            const centerLng = totalLng / points.length;
+            const centerPoint = new window.BMap.Point(centerLng, centerLat);
+            
+            // 根据点的分布设置缩放级别
+            let maxDist = 0;
+            points.forEach(p => {
+              const dist = map.getDistance(centerPoint, p);
+              maxDist = Math.max(maxDist, dist);
+            });
+            
+            // 根据最大距离计算合适的缩放级别
+            let zoom = 10;
+            if (maxDist < 1000) zoom = 15;
+            else if (maxDist < 5000) zoom = 13;
+            else if (maxDist < 10000) zoom = 12;
+            else if (maxDist < 20000) zoom = 11;
+            else if (maxDist < 50000) zoom = 10;
+            else zoom = 8;
+            
+            map.centerAndZoom(centerPoint, zoom);
+          }
+        }
+      } else if (points.length === 0 && itinerary) {
+        // 如果没有景点，显示目的地城市的中心位置
+        const city = itinerary.destination || '北京';
+        console.log(`没有找到景点标记，显示城市中心: ${city}`);
+        
+        const cityBaseCoordinates: Record<string, {latitude: number, longitude: number}> = {
+          '北京': { latitude: 39.9, longitude: 116.4 },
+          '上海': { latitude: 31.23, longitude: 121.47 },
+          '广州': { latitude: 23.13, longitude: 113.26 },
+          '深圳': { latitude: 22.54, longitude: 114.06 },
+          '杭州': { latitude: 30.27, longitude: 120.15 },
+          '成都': { latitude: 30.57, longitude: 104.06 },
+          '西安': { latitude: 34.34, longitude: 108.94 },
+          '南京': { latitude: 32.06, longitude: 118.79 },
+          '武汉': { latitude: 30.59, longitude: 114.31 },
+          '重庆': { latitude: 29.56, longitude: 106.55 },
+          '长沙': { latitude: 28.22, longitude: 112.94 },
+          '青岛': { latitude: 36.07, longitude: 120.38 },
+          '厦门': { latitude: 24.47, longitude: 118.08 },
+          '三亚': { latitude: 18.25, longitude: 109.51 }
+        };
+        
+        const defaultPoint = cityBaseCoordinates[city] || cityBaseCoordinates['北京'];
+        map.centerAndZoom(new window.BMap.Point(defaultPoint.longitude, defaultPoint.latitude), 11);
+      }
+      
+      console.log('地图标记渲染完成');
     } catch (error) {
       console.error('渲染地图标记失败:', error);
       setMapError('地图标记加载失败');
@@ -402,12 +839,24 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
 
   // 监听行程变化
   useEffect(() => {
+    console.log('行程或选择的日期发生变化');
     if (itinerary && selectedDayAttractions) {
-      if (!map && mapLoaded) {
-        initMap();
-      } else if (map) {
-        renderMapPoints();
-      }
+      console.log(`当前行程: ${itinerary.destination}，选择的日期: ${selectedDay}，景点数量: ${selectedDayAttractions.length}`);
+      
+      // 添加延迟，确保地图容器完全渲染
+      const timer = setTimeout(() => {
+        if (!map && mapLoaded) {
+          console.log('地图未初始化但已加载，开始初始化');
+          initMap();
+        } else if (map) {
+          console.log('地图已初始化，开始渲染标记');
+          renderMapPoints();
+        } else {
+          console.log('地图未加载完成，等待加载');
+        }
+      }, 300);  // 300ms延迟确保DOM更新完成
+      
+      return () => clearTimeout(timer);
     }
   }, [itinerary, selectedDay, selectedDayAttractions, map, mapLoaded]);
 
