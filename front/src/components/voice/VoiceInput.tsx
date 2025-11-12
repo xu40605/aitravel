@@ -8,11 +8,13 @@ const { Text } = Typography;
 interface VoiceInputProps {
   onTextChange?: (text: string) => void;
   placeholder?: string;
+  useDirect?: boolean; // 是否使用前端直接语音识别
 }
 
 export const VoiceInput: React.FC<VoiceInputProps> = ({
   onTextChange,
   placeholder = '按住说话，松开结束',
+  useDirect = false,
 }) => {
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +35,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       // 3秒后自动清除错误提示
       setTimeout(() => setError(null), 3000);
     },
+    useDirect,
   });
 
   const handleMouseDown = () => {

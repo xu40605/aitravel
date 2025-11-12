@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
 import VoiceRecognition from '../pages/VoiceRecognition';
+import DirectVoiceRecognition from '../pages/DirectVoiceRecognition';
 import PlannerPage from '../pages/Planner/PlannerPage';
 import MyPlansPage from '../pages/MyPlans/MyPlansPage';
 import ProfilePage from '../pages/Profile/ProfilePage';
@@ -20,6 +21,11 @@ const AppRoutes = () => {
       <Route path="/voice-recognition" element={
         <PrivateRoute>
           <VoiceRecognition />
+        </PrivateRoute>
+      } />
+      <Route path="/direct-voice-recognition" element={
+        <PrivateRoute>
+          <DirectVoiceRecognition />
         </PrivateRoute>
       } />
       

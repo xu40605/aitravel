@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import healthRouter from './routes/health';
 import authRouter from './routes/auth';
@@ -20,6 +21,16 @@ app.use('/api/auth', authRouter);
 app.use('/api/speech', speechRecognitionRouter);
 app.use('/api/planner', plannerRouter);
 app.use('/api/expenses', expensesRouter);
+
+// Static assets (serve built front-end)
+const staticDir = path.join(__dirname, 'public');
+app.use(express.static(staticDir));
+
+// SPA fallback for non-API routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(staticDir, 'index.html'));
+});
 
 // Error Handler
 app.use(errorHandler);

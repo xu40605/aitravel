@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { voiceApi } from './voiceApi';
+import { voiceApiDirect } from './voiceApiDirect';
 
 interface UseVoiceRecognitionProps {
   onResult?: (text: string) => void;
   onError?: (error: string) => void;
+  useDirect?: boolean; // 是否使用前端直接识别
 }
 
 interface UseVoiceRecognitionReturn {
@@ -17,6 +19,7 @@ interface UseVoiceRecognitionReturn {
 export const useVoiceRecognition = ({
   onResult,
   onError,
+  useDirect = false, // 默认使用后端识别
 }: UseVoiceRecognitionProps = {}): UseVoiceRecognitionReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
@@ -137,7 +140,8 @@ export const useVoiceRecognition = ({
             
             // 调用语音识别 API
             console.log('[语音录制] 开始调用语音识别API...');
-            const result = await voiceApi.recognize(audioBlob);
+            const api = useDirect ? voiceApiDirect : voiceApi;
+            const result = await api.recognize(audioBlob);
             
             // 处理识别结果
             if (result.error) {

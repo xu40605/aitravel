@@ -33,7 +33,7 @@ export class VoiceApi {
       formData.append('audio', audioBlob, 'recording.wav');
       
       // 获取后端API基础URL
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
       // 确保URL路径正确，避免重复的/api前缀
       const basePath = apiBaseUrl.endsWith('/api') ? apiBaseUrl : `${apiBaseUrl}/api`;
       const apiUrl = `${basePath}/speech/recognize`;
