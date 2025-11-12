@@ -55,7 +55,7 @@ export const buildPlannerPrompt = (userInput: PlannerRequest): string => {
           "description": "字符串，活动详细描述",
           "location": "字符串，活动地点",
           "duration": "字符串，活动时长",
-          "cost": 数字，活动费用（可选）,
+          "cost": 数字，活动费用（必填，每项活动都必须包含具体金额）,
           // 交通活动特有字段
           "transportType": "字符串，交通方式：公交/地铁/出租车/步行/其他（交通类型活动必填）",
           "route": "字符串，路线描述（交通类型活动必填）",
@@ -75,7 +75,7 @@ export const buildPlannerPrompt = (userInput: PlannerRequest): string => {
     // 生成与旅行天数相等的日程安排
   ],
   "summary": "字符串，行程总结和建议",
-  "estimatedBudget": 数字，总预算估计金额,
+  "estimatedBudget": 0, // 不需要大模型返回总预算估计，系统会自动计算
   "accommodationSummary": "字符串，住宿总体建议",
   "transportationSummary": "字符串，交通总体建议",
   "diningSummary": "字符串，美食总体建议",
@@ -96,11 +96,12 @@ export const buildPlannerPrompt = (userInput: PlannerRequest): string => {
 11. 行程安排必须地理连贯，避免地点之间距离过远导致的时间浪费
 12. 确保生成的天数与旅行天数完全一致
 13. 每个活动必须包含time、name、type和description字段
-14. 总预算估计不应超过用户指定的预算
+14. 所有活动的cost字段都必须填写具体金额，且所有活动金额总和应接近用户指定的预算
 15. 考虑用户偏好，合理安排相关活动和景点
 16. 行程必须按照用户需求展示连贯的地点转换流程，如从南京站到夫子庙的交通活动后，接着是游玩夫子庙的景点活动，然后是在附近餐厅用餐的餐厅活动等
 17. 所有活动都必须使用type字段明确标识其类型：景点、餐厅、交通、购物、娱乐、住宿或其他
 18. 时间安排合理，考虑实际移动所需时间
+19. 请注意，每项活动都必须包含具体的cost金额，系统将根据这些金额自动计算总预算
   `;
   
 };

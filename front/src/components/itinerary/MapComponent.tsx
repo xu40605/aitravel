@@ -107,7 +107,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
   // 选中日期的数据
   const selectedDayData = itinerary?.days.find(day => day.day === selectedDay)?.activities || [];
   
-  // 选中日期的数据，只显示景点、购物和娱乐类型
+  // 选中日期的数据，只显示景点类型
   const selectedDayAttractions = selectedDayData.filter(item => ['景点', '购物', '娱乐'].includes(item.type));
   
   // 标记列表引用
@@ -162,7 +162,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           oldScript.remove();
         }
         
-        const backupKey = 'QlL4bs1xgXxz5EjBTK9uwBaUhxSnR3in'; // 备用密钥
+        const backupKey = import.meta.env.VITE_BAIDU_MAP_BACKUP_KEY || 'QlL4bs1xgXxz5EjBTK9uwBaUhxSnR3in'; // 从环境变量读取备用密钥
         const backupScript = document.createElement('script');
         backupScript.src = `https://api.map.baidu.com/api?v=3.0&ak=${backupKey}&s=1&callback=onBaiduMapLoaded`;
         backupScript.type = 'text/javascript';
@@ -202,7 +202,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       // 创建新的脚本元素
       const script = document.createElement('script');
       // 使用新的API密钥格式，添加callback参数
-      const apiKey = 'mK3ap8koipICbwUSJWxhFnvYeo0f9QlQ'; // 主密钥
+      const apiKey = import.meta.env.VITE_BAIDU_MAP_KEY || 'mK3ap8koipICbwUSJWxhFnvYeo0f9QlQ'; // 从环境变量读取主密钥
       script.src = `https://api.map.baidu.com/api?v=3.0&ak=${apiKey}&s=1&callback=onBaiduMapLoaded`;
       script.type = 'text/javascript';
       script.async = true;
@@ -391,13 +391,26 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
         };
       };
       
+      // 检查坐标是否在目标城市合理范围内（简化版，实际应用中可以使用更复杂的地理围栏判断）
+      const isCoordinateInTargetCity = (lat: number, lng: number, targetCity: string): boolean => {
+        // 获取目标城市的基准坐标
+        const cityCoord = getCityBasedDefaultCoordinates('城市中心');
+        // 计算与城市中心的距离（简化为度数差的平方和，适用于城市范围内的检查）
+        const distanceSquared = Math.pow(lat - cityCoord.latitude, 2) + Math.pow(lng - cityCoord.longitude, 2);
+        // 设置一个合理的阈值（大约覆盖城市市区范围）
+        const threshold = 0.05; // 这个值需要根据实际情况调整
+        const isInRange = distanceSquared < threshold;
+        console.log(`坐标验证: ${lat},${lng} 是否在 ${targetCity} 范围内: ${isInRange}`);
+        return isInRange;
+      };
+      
       // 使用百度地图地理编码服务
       if (window.BMap && typeof window.BMap.Geocoder === 'function') {
         console.log(`使用百度地图地理编码服务查询: ${address}`);
         const geocoder = new window.BMap.Geocoder();
         
         // 确保使用行程的目的地城市作为查询范围
-        const city = itinerary?.destination || '';
+        const city = itinerary?.destination || '北京';
         console.log(`当前行程目的地城市: ${city}`);
         
         // 设置超时处理
@@ -405,10 +418,11 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           console.log(`地理编码查询超时: ${address}，使用备用方案`);
           // 使用基于城市的默认坐标并添加特定偏移
           const defaultCoords = getCityBasedDefaultCoordinates(address);
-                      const offset = getSpecificOffset(address, defaultCoords.latitude);
+          const offset = getSpecificOffset(address, defaultCoords.latitude);
           resolve({
             latitude: defaultCoords.latitude + offset.lat,
-            longitude: defaultCoords.longitude + offset.lng
+            longitude: defaultCoords.longitude + offset.lng,
+            isBd09: false
           });
         }, 3000); // 3秒超时
         
@@ -429,15 +443,21 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
         
         // 构建查询策略：使用多种方式尝试获取坐标
         const queryStrategies = [
-          // 策略1: 城市+地址
+          // 策略1: 城市+地址（精确格式）
           () => {
-            const fullAddress = city ? `${city}${address}` : address;
+            const fullAddress = city ? `${city}市${address}` : address; // 添加"市"以提高匹配精度
             console.log(`尝试策略1 - 完整地址: ${fullAddress}`);
             return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
               geocoder.getPoint(fullAddress, (point: any) => {
                 if (point) {
                   console.log(`策略1成功: ${fullAddress} -> ${point.lng}, ${point.lat}`);
-                  resolve({ latitude: point.lat, longitude: point.lng });
+                  // 验证坐标是否在目标城市范围内
+                  if (isCoordinateInTargetCity(point.lat, point.lng, city)) {
+                    resolve({ latitude: point.lat, longitude: point.lng });
+                  } else {
+                    console.log(`策略1返回的坐标不在目标城市范围内，尝试其他策略`);
+                    resolve(null);
+                  }
                 } else {
                   resolve(null);
                 }
@@ -445,14 +465,21 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
             });
           },
           
-          // 策略2: 单独查询地点名
+          // 策略2: 城市+地址（备选格式）
           () => {
-            console.log(`尝试策略2 - 单独地点名: ${address}`);
+            const fullAddress = city ? `${city}${address}` : address;
+            console.log(`尝试策略2 - 城市+地址: ${fullAddress}`);
             return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
-              geocoder.getPoint(address, (point: any) => {
+              geocoder.getPoint(fullAddress, (point: any) => {
                 if (point) {
-                  console.log(`策略2成功: ${address} -> ${point.lng}, ${point.lat}`);
-                  resolve({ latitude: point.lat, longitude: point.lng });
+                  console.log(`策略2成功: ${fullAddress} -> ${point.lng}, ${point.lat}`);
+                  // 验证坐标是否在目标城市范围内
+                  if (isCoordinateInTargetCity(point.lat, point.lng, city)) {
+                    resolve({ latitude: point.lat, longitude: point.lng });
+                  } else {
+                    console.log(`策略2返回的坐标不在目标城市范围内，尝试其他策略`);
+                    resolve(null);
+                  }
                 } else {
                   resolve(null);
                 }
@@ -462,13 +489,19 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           
           // 策略3: 城市+景点
           () => {
-            const scenicSpotAddress = city ? `${city}景点${address}` : `景点${address}`;
+            const scenicSpotAddress = city ? `${city}${address}` : address;
             console.log(`尝试策略3 - 城市+景点: ${scenicSpotAddress}`);
             return new Promise<{latitude: number, longitude: number} | null>((resolve) => {
               geocoder.getPoint(scenicSpotAddress, (point: any) => {
                 if (point) {
                   console.log(`策略3成功: ${scenicSpotAddress} -> ${point.lng}, ${point.lat}`);
-                  resolve({ latitude: point.lat, longitude: point.lng });
+                  // 验证坐标是否在目标城市范围内
+                  if (isCoordinateInTargetCity(point.lat, point.lng, city)) {
+                    resolve({ latitude: point.lat, longitude: point.lng });
+                  } else {
+                    console.log(`策略3返回的坐标不在目标城市范围内，尝试其他策略`);
+                    resolve(null);
+                  }
                 } else {
                   resolve(null);
                 }
@@ -492,7 +525,19 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                       const poi = results.getPoi(0);
                       const poiPoint = poi.point;
                       console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
-                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
+                      // 验证坐标是否在目标城市范围内
+                      if (isCoordinateInTargetCity(poiPoint.lat, poiPoint.lng, city)) {
+                        resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
+                      } else {
+                        console.log(`POI搜索返回的坐标不在目标城市范围内，使用基于城市的默认坐标`);
+                        const defaultCoords = getCityBasedDefaultCoordinates(address);
+                        const offset = getSpecificOffset(address, defaultCoords.latitude);
+                        resolve({
+                          latitude: defaultCoords.latitude + offset.lat,
+                          longitude: defaultCoords.longitude + offset.lng,
+                          isBd09: false
+                        });
+                      }
                     } else {
                       console.log(`POI搜索也失败，使用基于城市的默认坐标`);
                       const defaultCoords = getCityBasedDefaultCoordinates(address);
@@ -514,7 +559,19 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                       const poi = results.getPoi(0);
                       const poiPoint = poi.point;
                       console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
-                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
+                      // 验证坐标是否在目标城市范围内
+                      if (isCoordinateInTargetCity(poiPoint.lat, poiPoint.lng, city)) {
+                        resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
+                      } else {
+                        console.log(`POI搜索返回的坐标不在目标城市范围内，使用基于城市的默认坐标`);
+                        const defaultCoords = getCityBasedDefaultCoordinates(address);
+                        const offset = getSpecificOffset(address, defaultCoords.latitude);
+                        resolve({
+                          latitude: defaultCoords.latitude + offset.lat,
+                          longitude: defaultCoords.longitude + offset.lng,
+                          isBd09: false
+                        });
+                      }
                     } else {
                       console.log(`POI搜索也失败，使用基于城市的默认坐标`);
                       const defaultCoords = getCityBasedDefaultCoordinates(address);
@@ -534,17 +591,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                 clearTimeout(timeoutId);
                 console.log(`POI搜索失败:`, poiError);
                 const defaultCoords = getCityBasedDefaultCoordinates(address);
-                    const offset = getSpecificOffset(address, defaultCoords.latitude);
+                const offset = getSpecificOffset(address, defaultCoords.latitude);
                 resolve({
                   latitude: defaultCoords.latitude + offset.lat,
-                  longitude: defaultCoords.longitude + offset.lng
+                  longitude: defaultCoords.longitude + offset.lng,
+                  isBd09: false
                 });
               }
             } else {
               clearTimeout(timeoutId);
               console.log(`POI搜索服务不可用，使用基于城市的默认坐标`);
               const defaultCoords = getCityBasedDefaultCoordinates(address);
-                  const offset = getSpecificOffset(address, defaultCoords.latitude);
+              const offset = getSpecificOffset(address, defaultCoords.latitude);
               resolve({
                 latitude: defaultCoords.latitude + offset.lat,
                 longitude: defaultCoords.longitude + offset.lng,
@@ -561,7 +619,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
               // 为结果添加微小偏移，避免多个标记重叠
               const offset = getSpecificOffset(address, result.latitude);
               resolve({
-                latitude: result.latitude + offset.lat,  // 现在偏移量已经很小，不需要再缩小
+                latitude: result.latitude + offset.lat,
                 longitude: result.longitude + offset.lng,
                 isBd09: true  // 从百度地图API获取的坐标是BD-09格式
               });
@@ -579,10 +637,11 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       } else {
         console.log('地理编码服务不可用，使用城市默认坐标');
         const defaultCoords = getCityBasedDefaultCoordinates(address);
-              const offset = getSpecificOffset(address, defaultCoords.latitude);
+        const offset = getSpecificOffset(address, defaultCoords.latitude);
         resolve({
           latitude: defaultCoords.latitude + offset.lat,
-          longitude: defaultCoords.longitude + offset.lng
+          longitude: defaultCoords.longitude + offset.lng,
+          isBd09: false
         });
       }
     });
@@ -774,7 +833,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           markers.current.push(marker);
           
           // 添加信息窗口
-          const description = `${i + 1}. ${item.name}\n时间: ${item.time || '未指定'}\n${item.description || '暂无描述'}\n坐标: ${bdLat.toFixed(6)}, ${bdLng.toFixed(6)} (BD-09转换)`;
+          const description = `${i + 1}. ${item.name}\n时间: ${item.time || '未指定'}\n${item.description || '暂无描述'}\n坐标: ${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)} (BD-09转换)`;
           const infoWindow = new window.BMap.InfoWindow(description);
           marker.addEventListener('click', () => {
             map.openInfoWindow(infoWindow, bdPoint);

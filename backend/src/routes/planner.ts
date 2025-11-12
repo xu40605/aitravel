@@ -56,6 +56,35 @@ const validatePlannerRequest = (req: Request, res: Response, next: NextFunction)
 };
 
 /**
+ * 计算行程总预算
+ */
+const calculateTotalBudget = (itinerary: any): number => {
+  let totalCost = 0;
+  
+  if (itinerary.days && Array.isArray(itinerary.days)) {
+    itinerary.days.forEach((day: any) => {
+      if (day.activities && Array.isArray(day.activities)) {
+        day.activities.forEach((activity: any) => {
+          // 确保cost存在且是有效数字
+          if (activity.cost !== undefined && activity.cost !== null) {
+            const cost = Number(activity.cost);
+            if (!isNaN(cost)) {
+              totalCost += cost;
+            } else {
+              logger.warn(`无效的活动费用: ${activity.cost} for ${activity.name}`);
+            }
+          } else {
+            logger.warn(`活动缺少费用: ${activity.name}`);
+          }
+        });
+      }
+    });
+  }
+  
+  return totalCost;
+};
+
+/**
  * 尝试解析 JSON 响应
  */
 const tryParseItinerary = (rawText: string): Itinerary | undefined => {
@@ -73,6 +102,10 @@ const tryParseItinerary = (rawText: string): Itinerary | undefined => {
     
     // 验证是否包含必要字段
     if (parsed.destination && parsed.startDate && parsed.endDate && Array.isArray(parsed.days)) {
+      // 计算总预算
+      const totalBudget = calculateTotalBudget(parsed);
+      parsed.estimatedBudget = totalBudget;
+      logger.info(`自动计算总预算: ${totalBudget}`);
       return parsed as Itinerary;
     }
     
@@ -81,6 +114,10 @@ const tryParseItinerary = (rawText: string): Itinerary | undefined => {
     if (jsonMatch) {
       const parsedExtracted = JSON.parse(jsonMatch[0]);
       if (parsedExtracted.destination && parsedExtracted.startDate && parsedExtracted.endDate && Array.isArray(parsedExtracted.days)) {
+        // 计算总预算
+        const totalBudget = calculateTotalBudget(parsedExtracted);
+        parsedExtracted.estimatedBudget = totalBudget;
+        logger.info(`自动计算总预算: ${totalBudget}`);
         return parsedExtracted as Itinerary;
       }
     }

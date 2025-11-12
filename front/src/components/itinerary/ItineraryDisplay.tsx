@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Typography, Alert, List, Tag, Tabs, Spin } from 'antd';
 import { type Itinerary } from '../../api/planner';
+import MapComponent from './MapComponent';
 
 const { Title, Paragraph } = Typography;
 
@@ -281,7 +282,16 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ itinerary, loading 
           </Card>
         </div>
       )
-    }))
+    })),
+    {
+      key: 'map',
+      label: '地图',
+      children: (
+        <div className="map-view" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '16px 0' }}>
+          <MapComponent itinerary={itinerary} />
+        </div>
+      )
+    }
   ];
 
   return (
