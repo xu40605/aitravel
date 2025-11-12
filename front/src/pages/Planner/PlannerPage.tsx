@@ -28,6 +28,7 @@ class PlannerPageBuilder {
     setIsSaving?: (value: boolean) => void;
     setShowSaveModal?: (value: boolean) => void;
     setItineraryName?: (value: string) => void;
+    setShowVoiceModal?: (value: { [key: string]: boolean }) => void;
   } = {};
 
   setForm(form: any): PlannerPageBuilder {
@@ -62,6 +63,11 @@ class PlannerPageBuilder {
 
   setShowVoiceModal(modalState: { [key: string]: boolean }): PlannerPageBuilder {
     this.showVoiceModal = modalState;
+    // 更新React状态
+    if (this.stateUpdaters.setShowVoiceModal) {
+      this.stateUpdaters.setShowVoiceModal(modalState);
+      console.log('语音模态框状态更新:', modalState);
+    }
     return this;
   }
 
@@ -71,6 +77,7 @@ class PlannerPageBuilder {
     setIsSaving?: (value: boolean) => void;
     setShowSaveModal?: (value: boolean) => void;
     setItineraryName?: (value: string) => void;
+    setShowVoiceModal?: (value: { [key: string]: boolean }) => void;
   }): PlannerPageBuilder {
     this.stateUpdaters = updaters;
     return this;
@@ -110,32 +117,33 @@ class PlannerPageBuilder {
   }
 
   buildFormItem(label: string, name: string, required: boolean = false, rules?: any[]) {
-    const formItem = (
+    return (
       <Form.Item
         label={label}
-        name={name}
+        required={required}
         rules={required ? [...(rules || []), { required: true, message: `请输入${label}` }] : rules}
       >
         {this.buildFormField(name)}
       </Form.Item>
     );
-    return formItem;
   }
 
   buildFormField(fieldKey: string) {
-    // 为日期字段提供特殊处理，避免被Row/Col包裹导致表单无法收集值
+    // 为日期字段提供特殊处理
     if (fieldKey === 'date') {
       return (
-        <DatePicker.RangePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          disabledDate={(current) => current && current < dayjs().startOf('day')}
-          placeholder={['开始日期', '结束日期']}
-        />
+        <Form.Item name={fieldKey} noStyle>
+          <DatePicker.RangePicker
+            style={{ width: '100%' }}
+            format="YYYY-MM-DD"
+            disabledDate={(current) => current && current < dayjs().startOf('day')}
+            placeholder={['开始日期', '结束日期']}
+          />
+        </Form.Item>
       );
     }
     
-    const renderField = () => {
+    const inputField = (() => {
       switch (fieldKey) {
         case 'travelers':
         case 'budget':
@@ -145,16 +153,22 @@ class PlannerPageBuilder {
         default:
           return <Input placeholder={`请输入${fieldKey === 'destination' ? '目的地' : ''}`} />;
       }
-    };
+    })();
 
     return (
       <Row gutter={8} align="middle">
         <Col span={20}>
-          {renderField()}
+          {/* 保证Form.Item直接包裹Input */}
+          <Form.Item
+            name={fieldKey}
+            noStyle
+          >
+            {inputField}
+          </Form.Item>
         </Col>
         <Col span={4}>
           <Button
-              type="default"
+            type="default"
             icon={<AudioOutlined />}
             onClick={() => this.onShowVoiceInput(fieldKey)}
           >
@@ -643,12 +657,37 @@ class PlannerPageBuilder {
                       };
                       localStorage.setItem('plannerFormData', JSON.stringify(formDataToSave));
                       
+                      // 验证travelers字段，确保是有效的数字
+                      const travelersValue = values.travelers;
+                      let travelersNum: number;
+                      
+                      // 检查是否为纯数字
+                      if (typeof travelersValue === 'string' && !/^\d+$/.test(travelersValue)) {
+                        message.error('人数请输入数字格式，例如：3');
+                        return;
+                      }
+                      
+                      travelersNum = Number(travelersValue);
+                      
+                      // 验证人数的合理性
+                      if (isNaN(travelersNum) || travelersNum <= 0 || travelersNum > 50) {
+                        message.error('请输入有效的人数（1-50人之间）');
+                        return;
+                      }
+                      
+                      // 验证预算的合理性
+                      const budgetNum = Number(values.budget);
+                      if (isNaN(budgetNum) || budgetNum <= 0) {
+                        message.error('请输入有效的预算金额');
+                        return;
+                      }
+                      
                       const requestData: PlannerRequest = {
                         destination: values.destination.trim(),
                         startDate,
                         endDate,
-                        travelers: Number(values.travelers),
-                        budget: Number(values.budget),
+                        travelers: travelersNum,
+                        budget: budgetNum,
                         preferences: values.preferences?.trim(),
                       };
                         
@@ -828,7 +867,44 @@ const PlannerPage: React.FC = () => {
 
   const handleVoiceInputChange = (text: string) => {
     if (voiceFieldKey) {
-      form.setFieldValue(voiceFieldKey, text);
+      console.log(`开始处理语音输入结果，字段: ${voiceFieldKey}, 文本: ${text}`);
+      
+      // 获取更新前的字段值
+      const oldValue = form.getFieldValue(voiceFieldKey);
+      console.log(`更新前的${voiceFieldKey}字段值:`, oldValue);
+      
+      // 处理数字类型字段
+      if (voiceFieldKey === 'travelers' || voiceFieldKey === 'budget') {
+        // 从文本中提取数字
+        const numbers = text.match(/\d+/g);
+        if (numbers && numbers.length > 0) {
+          const numericValue = parseInt(numbers[0], 10);
+          // 使用setFieldsValue而不是setFieldValue，确保正确更新
+          form.setFieldsValue({ [voiceFieldKey]: numericValue });
+          console.log(`已将语音识别结果填入${voiceFieldKey}字段:`, numericValue);
+        } else {
+          // 如果没有找到数字，使用原始文本
+          form.setFieldsValue({ [voiceFieldKey]: text });
+          console.warn(`无法从语音输入中提取${voiceFieldKey === 'travelers' ? '人数' : '预算'}数字`);
+        }
+      } else {
+        // 非数字字段直接使用文本值
+        form.setFieldsValue({ [voiceFieldKey]: text });
+        console.log(`已将语音识别结果填入${voiceFieldKey}字段:`, text);
+      }
+      
+      // 验证字段以确保UI更新
+      form.validateFields([voiceFieldKey]).then(values => {
+        console.log(`验证后${voiceFieldKey}字段值:`, values[voiceFieldKey]);
+      }).catch(errorInfo => {
+        console.error(`字段验证失败:`, errorInfo);
+      });
+      
+      // 强制更新表单UI
+      setTimeout(() => {
+        const newValue = form.getFieldValue(voiceFieldKey);
+        console.log(`最终${voiceFieldKey}字段值:`, newValue);
+      }, 0);
       
       // 立即保存表单数据
       setTimeout(() => {
@@ -847,6 +923,7 @@ const PlannerPage: React.FC = () => {
         }
       }, 0);
     }
+    // 关闭模态框并清空字段键
     setShowVoiceModal({});
     setVoiceFieldKey('');
   };
@@ -874,7 +951,8 @@ const PlannerPage: React.FC = () => {
       setItinerary,
       setIsSaving,
       setShowSaveModal,
-      setItineraryName
+      setItineraryName,
+      setShowVoiceModal // 添加语音模态框状态更新器
     });
 
   return builder.build();

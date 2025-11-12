@@ -107,8 +107,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
   // 选中日期的数据
   const selectedDayData = itinerary?.days.find(day => day.day === selectedDay)?.activities || [];
   
-  // 选中日期的景点数据
-  const selectedDayAttractions = selectedDayData.filter(item => item.type === '景点');
+  // 选中日期的数据，只显示景点、购物和娱乐类型
+  const selectedDayAttractions = selectedDayData.filter(item => ['景点', '购物', '娱乐'].includes(item.type));
   
   // 标记列表引用
   const markers = useRef<Array<any>>([]);
@@ -279,16 +279,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       }
       
       // 如果还是没有容器，等待并重试
-      if (!container) {
-        console.error('地图容器不存在，等待容器渲染完成...');
-        
-        // 容器不存在时，尝试在短时间后重试
-        setTimeout(() => {
-          console.log('重试初始化地图...');
-          initMap();
-        }, 100);
-        return;
-      }
+  if (!container) {
+    console.error('地图容器不存在，等待容器渲染完成...');
+    
+    // 容器不存在时，尝试在短时间后重试，但只有当有行程时才重试，避免无限重试
+    if (itinerary) {
+      setTimeout(() => {
+        console.log('重试初始化地图...');
+        initMap();
+      }, 100);
+    }
+    return;
+  }
       
       // 检查容器尺寸，确保有足够空间显示地图
       const containerStyle = window.getComputedStyle(container);
@@ -355,27 +357,37 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
 
 
   // 增强的地理编码功能，确保正确获取不同城市的景点坐标
-  const getCoordinatesByGeocoding = (address: string): Promise<{latitude: number, longitude: number}> => {
+  const getCoordinatesByGeocoding = (address: string): Promise<{latitude: number, longitude: number, isBd09?: boolean}> => {
     return new Promise((resolve) => {
       console.log(`开始获取地点坐标: ${address}`);
       
       // 先检查是否有预定义坐标
       if (mockCoordinates[address]) {
         console.log(`使用预定义坐标: ${address}`);
-        resolve(mockCoordinates[address]);
+        // 预定义坐标是WGS84格式，需要转换
+        resolve({...mockCoordinates[address], isBd09: false});
         return;
       }
       
-      // 为每个景点名称生成特定的偏移量，避免多个景点重叠
-      const getSpecificOffset = (name: string): {lat: number, lng: number} => {
+      // 为每个景点名称生成特定的偏移量，避免多个景点重叠 - 使用基于米的微小偏移
+      const getSpecificOffset = (name: string, baseLat = 30): {lat: number, lng: number} => {
+        // 米转纬度: 1度纬度约等于111.32公里
+        const metersToDegLat = (m: number) => m / 111320;
+        // 米转经度: 根据纬度计算，经度在不同纬度处长度不同
+        const metersToDegLng = (m: number, lat: number) => m / (111320 * Math.cos(lat * Math.PI / 180));
+        
         let hash = 0;
         for (let i = 0; i < name.length; i++) {
           hash = name.charCodeAt(i) + ((hash << 5) - hash);
         }
-        // 生成更明显的偏移量，确保不同景点有足够距离
+        const seed = Math.abs(hash);
+        // 生成-40到40米范围内的偏移量
+        const offsetMetersLat = ((seed % 81) - 40); // -40..40 m
+        const offsetMetersLng = (((seed >> 8) % 81) - 40);
+        
         return {
-          lat: ((hash % 500) / 10000) * (hash % 2 === 0 ? 1 : -1),
-          lng: (((hash >> 8) % 500) / 10000) * (hash % 3 === 0 ? 1 : -1)
+          lat: metersToDegLat(offsetMetersLat),
+          lng: metersToDegLng(offsetMetersLng, baseLat)
         };
       };
       
@@ -393,7 +405,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           console.log(`地理编码查询超时: ${address}，使用备用方案`);
           // 使用基于城市的默认坐标并添加特定偏移
           const defaultCoords = getCityBasedDefaultCoordinates(address);
-          const offset = getSpecificOffset(address);
+                      const offset = getSpecificOffset(address, defaultCoords.latitude);
           resolve({
             latitude: defaultCoords.latitude + offset.lat,
             longitude: defaultCoords.longitude + offset.lng
@@ -480,14 +492,15 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                       const poi = results.getPoi(0);
                       const poiPoint = poi.point;
                       console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
-                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng });
+                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
                     } else {
                       console.log(`POI搜索也失败，使用基于城市的默认坐标`);
                       const defaultCoords = getCityBasedDefaultCoordinates(address);
-                      const offset = getSpecificOffset(address);
+                      const offset = getSpecificOffset(address, defaultCoords.latitude);
                       resolve({
                         latitude: defaultCoords.latitude + offset.lat,
-                        longitude: defaultCoords.longitude + offset.lng
+                        longitude: defaultCoords.longitude + offset.lng,
+                        isBd09: false  // 默认坐标是WGS84格式
                       });
                     }
                   }
@@ -501,14 +514,15 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                       const poi = results.getPoi(0);
                       const poiPoint = poi.point;
                       console.log(`POI搜索成功: ${address} -> ${poiPoint.lng}, ${poiPoint.lat}`);
-                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng });
+                      resolve({ latitude: poiPoint.lat, longitude: poiPoint.lng, isBd09: true });
                     } else {
                       console.log(`POI搜索也失败，使用基于城市的默认坐标`);
                       const defaultCoords = getCityBasedDefaultCoordinates(address);
-                      const offset = getSpecificOffset(address);
+                      const offset = getSpecificOffset(address, defaultCoords.latitude);
                       resolve({
                         latitude: defaultCoords.latitude + offset.lat,
-                        longitude: defaultCoords.longitude + offset.lng
+                        longitude: defaultCoords.longitude + offset.lng,
+                        isBd09: false  // 默认坐标是WGS84格式
                       });
                     }
                   });
@@ -520,7 +534,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
                 clearTimeout(timeoutId);
                 console.log(`POI搜索失败:`, poiError);
                 const defaultCoords = getCityBasedDefaultCoordinates(address);
-                const offset = getSpecificOffset(address);
+                    const offset = getSpecificOffset(address, defaultCoords.latitude);
                 resolve({
                   latitude: defaultCoords.latitude + offset.lat,
                   longitude: defaultCoords.longitude + offset.lng
@@ -530,10 +544,11 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
               clearTimeout(timeoutId);
               console.log(`POI搜索服务不可用，使用基于城市的默认坐标`);
               const defaultCoords = getCityBasedDefaultCoordinates(address);
-              const offset = getSpecificOffset(address);
+                  const offset = getSpecificOffset(address, defaultCoords.latitude);
               resolve({
                 latitude: defaultCoords.latitude + offset.lat,
-                longitude: defaultCoords.longitude + offset.lng
+                longitude: defaultCoords.longitude + offset.lng,
+                isBd09: false  // 默认坐标是WGS84格式
               });
             }
             return;
@@ -544,10 +559,11 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
             if (result) {
               clearTimeout(timeoutId);
               // 为结果添加微小偏移，避免多个标记重叠
-              const offset = getSpecificOffset(address);
+              const offset = getSpecificOffset(address, result.latitude);
               resolve({
-                latitude: result.latitude + offset.lat * 0.5,  // 缩小偏移量
-                longitude: result.longitude + offset.lng * 0.5
+                latitude: result.latitude + offset.lat,  // 现在偏移量已经很小，不需要再缩小
+                longitude: result.longitude + offset.lng,
+                isBd09: true  // 从百度地图API获取的坐标是BD-09格式
               });
             } else {
               tryNextStrategy(index + 1);
@@ -563,7 +579,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       } else {
         console.log('地理编码服务不可用，使用城市默认坐标');
         const defaultCoords = getCityBasedDefaultCoordinates(address);
-        const offset = getSpecificOffset(address);
+              const offset = getSpecificOffset(address, defaultCoords.latitude);
         resolve({
           latitude: defaultCoords.latitude + offset.lat,
           longitude: defaultCoords.longitude + offset.lng
@@ -636,9 +652,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     
-    // 生成基于城市的坐标，确保在城市可视范围内，增加偏移量以避免标记重叠
-    const latOffset = (hash % 200) / 1000;
-    const lngOffset = ((hash >> 8) % 200) / 1000;
+    // 生成基于城市的坐标，确保在城市可视范围内，使用基于米的微小偏移量避免标记重叠
+    // 米转纬度: 1度纬度约等于111.32公里
+    const metersToDegLat = (m: number) => m / 111320;
+    // 米转经度: 根据纬度计算，经度在不同纬度处长度不同
+    const metersToDegLng = (m: number, lat: number) => m / (111320 * Math.cos(lat * Math.PI / 180));
+    
+    // 生成-30到30米范围内的微小偏移量
+    const offsetMetersLat = ((hash % 61) - 30); // -30..30 m
+    const offsetMetersLng = (((hash >> 8) % 61) - 30);
+    
+    const latOffset = metersToDegLat(offsetMetersLat);
+    const lngOffset = metersToDegLng(offsetMetersLng, baseCoord.latitude);
     
     const result = {
       latitude: baseCoord.latitude + latOffset,
@@ -681,6 +706,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
           
           // 获取坐标，添加重试逻辑
           let coordinates;
+          let isBd09Coordinate = false; // 标记坐标是否已经是BD-09坐标系
           let retryCount = 0;
           const maxRetries = 2;
           
@@ -688,14 +714,17 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
             try {
               coordinates = await getCoordinatesByGeocoding(item.name);
               console.log(`成功获取坐标: ${item.name} -> ${coordinates.latitude}, ${coordinates.longitude}`);
+              // 使用返回的isBd09标志来确定坐标系统
+              isBd09Coordinate = coordinates.isBd09 || false;
               break;
             } catch (geoError) {
               retryCount++;
               console.warn(`获取坐标失败，正在重试 (${retryCount}/${maxRetries}):`, geoError);
               if (retryCount > maxRetries) {
-                // 使用备用坐标
+                // 使用备用坐标 - 这些是WGS84坐标，需要转换
                 coordinates = getCityBasedDefaultCoordinates(item.name);
                 console.log(`使用备用坐标: ${item.name} -> ${coordinates.latitude}, ${coordinates.longitude}`);
+                isBd09Coordinate = false;
               }
             }
           }
@@ -706,9 +735,17 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
             continue;
           }
           
-          // 使用前端手动坐标转换算法，将WGS84坐标转换为BD-09坐标
-          const [bdLng, bdLat] = wgs84ToBd09(coordinates.longitude, coordinates.latitude);
-          const bdPoint = new window.BMap.Point(bdLng, bdLat);
+          let bdPoint;
+          if (isBd09Coordinate) {
+            // 已经是BD-09坐标，直接使用
+            bdPoint = new window.BMap.Point(coordinates.longitude, coordinates.latitude);
+            console.log(`直接使用BD-09坐标: ${bdPoint.lng}, ${bdPoint.lat}`);
+          } else {
+            // WGS84坐标需要转换为BD-09坐标
+            const [bdLng, bdLat] = wgs84ToBd09(coordinates.longitude, coordinates.latitude);
+            bdPoint = new window.BMap.Point(bdLng, bdLat);
+            console.log(`WGS84转BD-09坐标: ${coordinates.longitude},${coordinates.latitude} -> ${bdLng},${bdLat}`);
+          }
           points.push(bdPoint);
           
           // 创建标记
@@ -840,6 +877,24 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
   // 监听行程变化
   useEffect(() => {
     console.log('行程或选择的日期发生变化');
+    // 当行程变为null时，清理地图资源
+    if (!itinerary) {
+      try {
+        // 清理标记和地图实例
+        if (map) {
+          map.clearOverlays();
+          markers.current = [];
+        }
+        
+        setMap(null);
+        setMapLoaded(false);
+        setMapError(null);
+      } catch (e) {
+        console.error('清理地图资源失败:', e);
+      }
+      return;
+    }
+    
     if (itinerary && selectedDayAttractions) {
       console.log(`当前行程: ${itinerary.destination}，选择的日期: ${selectedDay}，景点数量: ${selectedDayAttractions.length}`);
       
@@ -851,8 +906,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
         } else if (map) {
           console.log('地图已初始化，开始渲染标记');
           renderMapPoints();
-        } else {
-          console.log('地图未加载完成，等待加载');
+        } else if (!mapLoaded) {
+          console.log('地图未加载完成，开始加载地图');
+          loadBaiduMapScript();
         }
       }, 300);  // 300ms延迟确保DOM更新完成
       
@@ -862,8 +918,10 @@ const MapComponent: React.FC<MapComponentProps> = ({ itinerary }) => {
 
   // 页面挂载时加载地图并处理清理
   useEffect(() => {
-    // 加载地图脚本
-    loadBaiduMapScript();
+    // 只有当有行程时才加载地图脚本
+    if (itinerary) {
+      loadBaiduMapScript();
+    }
     
     // 清理函数，移除地图实例和相关资源
     return () => {
